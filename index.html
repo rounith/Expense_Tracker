@@ -59,26 +59,29 @@
     <div class="container mx-auto p-4 md:p-8 max-w-2xl">
         <header class="text-center mb-8">
             <h1 class="text-4xl font-bold text-gray-900">Smart Expense Tracker</h1>
-            <p class="text-gray-600 mt-2">Scan your bill, extract items with AI, and save to Airtable.</p>
+            <p class="text-gray-600 mt-2">Scan bills, split costs, track debts, and settle up.</p>
         </header>
 
         <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg mb-6" role="alert">
             <p class="font-bold">Configuration</p>
-            <p>Your API keys are loaded from the <code>config.js</code> file. Make sure you've entered your
-                credentials there.</p>
+            <p>Your API keys and table names are loaded from the <code>config.js</code> file. Make sure you've entered your credentials and table names there.</p>
+        </div>
+        
+        <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">Who Owes Whom</h2>
+            <div id="debtsList" class="min-h-[50px] flex items-center justify-center">
+                <p class="text-gray-500">Loading debts...</p>
+            </div>
         </div>
 
         <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">1. Scan Your Bill</h2>
-
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">1. Add a New Expense</h2>
             <div class="mb-4">
-                <label for="billTitle" class="block text-sm font-medium text-gray-700 mb-1">Bill Title
-                    (Optional)</label>
+                <label for="billTitle" class="block text-sm font-medium text-gray-700 mb-1">Bill Title (Optional)</label>
                 <input type="text" id="billTitle"
                     class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                     placeholder="e.g., Lunch with team, Weekly Groceries">
             </div>
-
             <div class="mb-4">
                 <label class="block text-sm font-medium text-gray-700 mb-2">Upload or Capture Bill Image</label>
                 <input type="file" id="imageUpload" accept="image/*" class="hidden">
@@ -93,80 +96,63 @@
                     </button>
                 </div>
             </div>
-
             <div id="imagePreviewContainer" class="mb-4 hidden text-center">
                 <img id="imagePreview" src="#" alt="Image Preview"
                     class="max-w-full h-auto mx-auto rounded-lg shadow-inner border border-gray-200"
                     style="max-height: 400px;" />
             </div>
-
             <video id="cameraFeed" class="hidden w-full rounded-lg mb-2" autoplay></video>
             <canvas id="cameraCanvas" class="hidden"></canvas>
-            <button id="captureBtn"
-                class="hidden w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg mb-4">Capture
-                Photo</button>
-        </div>
-        <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">Who Owes Whom</h2>
-            <div id="debtsList" class="min-h-[50px] flex items-center justify-center">
-                <p class="text-gray-500">Loading debts...</p>
-            </div>
+            <button id="captureBtn" class="hidden w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg mb-4">Capture Photo</button>
         </div>
 
         <div id="verificationSection" class="bg-white p-6 rounded-2xl shadow-md hidden">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">2. Verify Extracted Items</h2>
-
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">2. Verify & Split</h2>
             <div id="loader" class="text-center p-4">
-                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto">
-                </div>
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto"></div>
                 <p id="status" class="text-gray-500 mt-2">Scanning bill with AI...</p>
             </div>
-
             <div id="resultsContainer" class="hidden">
-                <div id="itemsList" class="space-y-3">
-                </div>
+                <div id="itemsList" class="space-y-3"></div>
                 <div class="flex justify-between items-center mt-4 pt-4 border-t-2">
-                    <button id="addItemBtn"
-                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm">+ Add
-                        Item</button>
+                    <button id="addItemBtn" class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm">+ Add Item</button>
                     <div class="text-right">
                         <p class="text-gray-600 font-medium">Total</p>
-                        <p id="totalAmount" class="text-2xl font-bold">$0.00</p>
+                        <p id="totalAmount" class="text-2xl font-bold">₹0.00</p>
+                    </div>
+                </div>
+                <div id="splitSection" class="mt-6 pt-4 border-t">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                            <label for="paidByInput" class="block text-sm font-medium text-gray-700 mb-1">Paid by:</label>
+                            <select id="paidByInput" class="w-full p-2 border border-gray-300 rounded-lg"></select>
+                        </div>
+                        <div>
+                            <label for="splitBetweenInput" class="block text-sm font-medium text-gray-700 mb-1">Split between:</label>
+                            <select id="splitBetweenInput" multiple class="w-full p-2 border border-gray-300 rounded-lg h-24"></select>
+                        </div>
                     </div>
                 </div>
             </div>
-
             <div id="errorResult" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg"></div>
-
-            <label>Paid by:</label>
-            <select id="paidByInput"></select>
-
-            <label>Split between:</label>
-            <select id="splitBetweenInput" multiple></select>
-
-
-            <button id="saveBtn"
-                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400"
-                disabled>
-                Save Expense to Airtable
+            <button id="saveBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400" disabled>
+                Save Expense
             </button>
-
-
-
         </div>
 
         <footer class="text-center mt-8 text-sm text-gray-500">
-            <p>&copy; 2024 Smart Expense Tracker. Powered by AI.</p>
+            <p>&copy; 2025 Smart Expense Tracker. Powered by AI.</p>
         </footer>
     </div>
 
     <script src="config.js"></script>
     <script>
-        document.addEventListener("DOMContentLoaded", () => {
-            loadPeopleFromAirtable();
-        });
+        // --- Global state and DOM Elements ---
+        let imageBase64 = null;
+        let stream = null;
+        let extractedItems = [];
+        let allPeople = {}; // { id: { name, ... }, ... }
 
-        // DOM Elements
         const billTitleInput = document.getElementById('billTitle');
         const imageUploadInput = document.getElementById('imageUpload');
         const imagePreviewContainer = document.getElementById('imagePreviewContainer');
@@ -175,7 +161,6 @@
         const cameraFeed = document.getElementById('cameraFeed');
         const captureBtn = document.getElementById('captureBtn');
         const cameraCanvas = document.getElementById('cameraCanvas');
-
         const verificationSection = document.getElementById('verificationSection');
         const loader = document.getElementById('loader');
         const statusP = document.getElementById('status');
@@ -185,21 +170,129 @@
         const totalAmountP = document.getElementById('totalAmount');
         const errorResultDiv = document.getElementById('errorResult');
         const saveBtn = document.getElementById('saveBtn');
+        const paidByInput = document.getElementById('paidByInput');
+        const splitBetweenInput = document.getElementById('splitBetweenInput');
+        const debtsListDiv = document.getElementById('debtsList');
+        
+        // --- Core Application Logic (Functions moved up) ---
 
-        let imageBase64 = null;
-        let stream = null;
-        let extractedItems = [];
+        async function loadPeopleFromAirtable() {
+            try {
+                const peopleRecords = await fetchFromAirtable(AIRTABLE_PEOPLE_TABLE_NAME);
+                allPeople = peopleRecords.reduce((acc, record) => {
+                    acc[record.id] = { id: record.id, name: record.fields.Name };
+                    return acc;
+                }, {});
+                populatePeopleSelectors();
+            } catch (error) {
+                console.error("Fatal Error: Could not load people from Airtable.", error);
+                debtsListDiv.innerHTML = `<p class="text-red-500">Could not load people from Airtable. The app cannot function.</p>`;
+            }
+        }
 
-
+        async function loadAndRenderDebts() {
+            showDebtLoader(true);
+            try {
+                const bills = await fetchBillsFromAirtable();
+                const balances = calculateDebts(bills, allPeople);
+                renderDebts(balances, allPeople);
+            } catch(e) {
+                console.error("Failed to load debts:", e);
+                debtsListDiv.innerHTML = `<p class="text-red-500">Could not load debts. Check console for errors.</p>`;
+            } finally {
+                showDebtLoader(false);
+            }
+        }
+        
+        // --- Initialization ---
+        document.addEventListener("DOMContentLoaded", async () => {
+            // This now works because the functions are defined above this call.
+            await loadPeopleFromAirtable();
+            await loadAndRenderDebts();
+        });
+        
         // --- Event Listeners ---
         imageUploadInput.addEventListener('change', handleImageFile);
         cameraBtn.addEventListener('click', startCamera);
         captureBtn.addEventListener('click', capturePhoto);
         addItemBtn.addEventListener('click', addManualItem);
         saveBtn.addEventListener('click', saveExpenseToAirtable);
-        itemsList.addEventListener('input', updateTotal); // Use event delegation for dynamic inputs
+        itemsList.addEventListener('input', updateTotal);
 
+        // --- Debt Calculation and Rendering ---
+        function calculateDebts(bills, peopleMap) {
+            const balances = {}; // { 'debtorId-creditorId': { from, to, amount, bills: [bill object] } }
 
+            bills.forEach(bill => {
+                if (!bill.totalAmount || !bill.paidBy || bill.splitBetween.length === 0) return;
+
+                const paidById = bill.paidBy;
+                const settledByIds = bill.settledBy || [];
+                const debtors = bill.splitBetween.filter(id => id !== paidById && !settledByIds.includes(id));
+                
+                if (debtors.length === 0) return;
+
+                const share = bill.totalAmount / bill.splitBetween.length;
+
+                debtors.forEach(debtorId => {
+                    const key = `${debtorId}-${paidById}`;
+                    if (!balances[key]) {
+                        balances[key] = {
+                            from: peopleMap[debtorId]?.name || 'Unknown',
+                            fromId: debtorId,
+                            to: peopleMap[paidById]?.name || 'Unknown',
+                            toId: paidById,
+                            amount: 0,
+                            bills: []
+                        };
+                    }
+                    balances[key].amount += share;
+                    // Store the entire bill object for the settlement function
+                    balances[key].bills.push({ id: bill.id, settledBy: bill.settledBy });
+                });
+            });
+            return Object.values(balances);
+        }
+        
+        function renderDebts(balances) {
+            debtsListDiv.innerHTML = '';
+            if (balances.length === 0) {
+                debtsListDiv.innerHTML = '<p class="text-green-600 text-center">🎉 All settled up!</p>';
+                return;
+            }
+
+            balances.forEach(debt => {
+                const row = document.createElement('div');
+                row.className = 'debt-row';
+                row.innerHTML = `<span><b>${debt.from}</b> owes <b>${debt.to}</b>: <span class="font-bold text-blue-600">₹${debt.amount.toFixed(2)}</span></span>`;
+                
+                const button = document.createElement('button');
+                button.textContent = 'Settle Up';
+                button.onclick = () => markDebtAsPaid(debt.fromId, debt.bills);
+                
+                row.appendChild(button);
+                debtsListDiv.appendChild(row);
+            });
+        }
+        
+        async function markDebtAsPaid(debtorId, billsToSettle) {
+            showDebtLoader(true, "Settling debt...");
+            try {
+                for (const bill of billsToSettle) {
+                    // Use a Set to ensure the debtorId is added only once
+                    const updatedSettledBy = [...new Set([...bill.settledBy, debtorId])];
+                    await updateAirtableRecord(AIRTABLE_BILLS_TABLE_NAME, bill.id, { "Settled By": updatedSettledBy });
+                }
+                await loadAndRenderDebts(); // Refresh the list
+            } catch(e) {
+                console.error("Failed to mark debt as paid:", e);
+                alert("Error settling debt. Please try again.");
+            } finally {
+                showDebtLoader(false);
+            }
+        }
+        
+        // --- Image & AI Processing ---
         function handleImageFile(event) {
             const file = event.target.files[0];
             if (file) {
@@ -214,9 +307,8 @@
                 reader.readAsDataURL(file);
             }
         }
-
         async function startCamera() {
-            try {
+             try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 cameraFeed.srcObject = stream;
                 cameraFeed.classList.remove('hidden');
@@ -228,22 +320,18 @@
                 alert("Error: Could not access camera. Please ensure you've granted permission.");
             }
         }
-
         function capturePhoto() {
             cameraCanvas.width = cameraFeed.videoWidth;
             cameraCanvas.height = cameraFeed.videoHeight;
             const context = cameraCanvas.getContext('2d');
             context.drawImage(cameraFeed, 0, 0, cameraCanvas.width, cameraCanvas.height);
-
             const dataUrl = cameraCanvas.toDataURL('image/png');
             imagePreview.src = dataUrl;
             imagePreviewContainer.classList.remove('hidden');
             imageBase64 = dataUrl.split(',')[1];
-
             stopCamera();
             scanImageForItems();
         }
-
         function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
@@ -251,239 +339,66 @@
             cameraFeed.classList.add('hidden');
             captureBtn.classList.add('hidden');
         }
-
-        // Calculate total amount from items
-        async function fetchBillsFromAirtable() {
-            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_BILLS_TABLE_NAME}?view=Grid%20view`;
-
-            const res = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${AIRTABLE_API_KEY}`
-                }
-            });
-
-            const data = await res.json();
-            return data.records.map(record => ({
-                totalAmount: record.fields['Total Price'],
-                paidBy: record.fields['Paid by']?.[0], // record ID
-                splitBetween: record.fields['Split between'] || [], // array of record IDs
-                id: record.id
-            }));
-        }
-
-        async function fetchPeopleFromAirtable() {
-            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_PEOPLE_TABLE_NAME}`;
-            const res = await fetch(url, {
-                headers: {
-                    Authorization: `Bearer ${AIRTABLE_API_KEY}`
-                }
-            });
-
-            const data = await res.json();
-            // Map of person ID → { id, name }
-            const peopleMap = {};
-            data.records.forEach(record => {
-                peopleMap[record.id] = { id: record.id, name: record.fields['Name'] };
-            });
-            return peopleMap;
-        }
-
-        function calculateDebts(bills, peopleMap) {
-            const balances = {}; // { personId: { name, owes: { toPersonId: amount } } }
-
-            bills.forEach(bill => {
-                const total = bill.totalAmount;
-                const paidBy = bill.paidBy;
-                const paidByName = peopleMap[paidBy]?.name || 'Unknown';
-
-                const splitBetween = bill.splitBetween;
-                const share = total / splitBetween.length;
-
-                splitBetween.forEach(personId => {
-                    if (personId === paidBy) return;
-
-                    if (!balances[personId]) {
-                        balances[personId] = { name: peopleMap[personId]?.name || 'Unknown', owes: {} };
-                    }
-
-                    if (!balances[personId].owes[paidBy]) {
-                        balances[personId].owes[paidBy] = 0;
-                    }
-
-                    balances[personId].owes[paidBy] += share;
-                });
-            });
-
-            return balances;
-        }
-
-        function renderDebts(balances, peopleMap) {
-            const container = document.getElementById("debtsList");
-            container.innerHTML = '';
-
-            let hasDebts = false;
-
-            Object.entries(balances).forEach(([personId, data]) => {
-                Object.entries(data.owes).forEach(([toId, amount]) => {
-                    const debtor = data.name;
-                    const creditor = peopleMap[toId]?.name || 'Someone';
-
-                    const row = document.createElement('div');
-                    row.classList.add('debt-row');
-
-                    // Add text
-                    const text = document.createElement('span');
-                    text.textContent = `${debtor} owes ${creditor}: ₹${amount.toFixed(2)}`;
-                    row.appendChild(text);
-
-                    // Add "Mark as Paid" button
-                    const button = document.createElement('button');
-                    button.textContent = 'Mark as Paid';
-                    button.style.marginLeft = '12px';
-                    button.onclick = () => {
-                        row.remove(); // 🧹 remove the row visually
-                        // Optionally: call backend or update Airtable
-                    };
-                    row.appendChild(button);
-
-                    container.appendChild(row);
-                    hasDebts = true;
-                });
-            });
-
-            if (!hasDebts) {
-                container.innerHTML = '🎉 No one owes anyone!';
-            }
-        }
-
-
-        async function loadAndRenderDebts() {
-            const [bills, peopleMap] = await Promise.all([
-                fetchBillsFromAirtable(),
-                fetchPeopleFromAirtable()
-            ]);
-
-            const balances = calculateDebts(bills, peopleMap);
-            renderDebts(balances, peopleMap);
-        }
-
-        document.addEventListener("DOMContentLoaded", loadAndRenderDebts);
-
-        // --- Core AI & Data Functions ---
-
+        
         async function scanImageForItems() {
             if (!checkApiKeys(true)) return;
-            if (!imageBase64) {
-                alert("No image selected to scan.");
-                return;
-            }
-
-            // Show verification section and loader
             verificationSection.classList.remove('hidden');
-            loader.classList.remove('hidden');
-            resultsContainer.classList.add('hidden');
-            errorResultDiv.classList.add('hidden');
-            statusP.textContent = "Scanning bill with AI...";
+            showLoader(true, "Scanning bill with AI...");
             saveBtn.disabled = true;
 
             const apiKey = GEMINI_API_KEY;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
-
             const payload = {
                 contents: [{
                     parts: [
-                        {
-                            text: `You are an expert receipt data extraction service. Analyze the attached receipt image. Extract all line items and their prices. 
-                        Your response MUST be a valid JSON array of objects. Each object must have two keys: "item" (string) and "price" (number).
-                        In the end i want you to include taxes (Calculate total taxes and tips) as well, if they are present in the receipt.
-                        Do not include total, or any non-item lines. If you cannot find any items, return an empty array [].
-
-                        Example response:
-                        [
-                            {"item": "Latte", "price": 4.50},
-                            {"item": "Avocado Toast", "price": 12.00}
-                            {"item": "Tax", "price": 1.50},
-                            {"item": "Tip", "price": 2.00}
-                        ]
-                        `},
+                        { text: `You are an expert receipt data extraction service for Indian receipts. Analyze the attached receipt image. Extract all line items and their prices. If there are taxes (like CGST, SGST) or tips, include them as separate items. Your response MUST be a valid JSON array of objects. Each object must have two keys: "item" (string) and "price" (number). If you cannot find any items, return an empty array [].` },
                         { inline_data: { mime_type: "image/png", data: imageBase64 } }
                     ]
                 }],
-                generationConfig: {
-                    "responseMimeType": "application/json",
-                    "maxOutputTokens": 2048
-                }
+                generationConfig: { "responseMimeType": "application/json", "maxOutputTokens": 2048 }
             };
 
             try {
-                const response = await fetch(apiUrl, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify(payload)
-                });
-
+                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
                 if (!response.ok) {
                     const errorBody = await response.json();
                     throw new Error(`API Error: ${response.status} - ${errorBody.error.message}`);
                 }
-
                 const result = await response.json();
-                const text = result.candidates[0].content.parts[0].text;
-                extractedItems = JSON.parse(text);
-
+                extractedItems = JSON.parse(result.candidates[0].content.parts[0].text);
                 renderItems(extractedItems);
-                loader.classList.add('hidden');
                 resultsContainer.classList.remove('hidden');
                 saveBtn.disabled = false;
-
             } catch (error) {
                 console.error("Error scanning image:", error);
                 showError(`Failed to process receipt. Error: ${error.message}`);
+            } finally {
+                showLoader(false);
             }
         }
-        // --- Airtable Integration ---
 
-        // Load people from Airtable when the page loads
-        async function loadPeopleFromAirtable() {
-            const apiKey = AIRTABLE_API_KEY;
-            const baseId = AIRTABLE_BASE_ID;
-            const tableName = AIRTABLE_PEOPLE_TABLE_NAME;
-
-            const url = `https://api.airtable.com/v0/${baseId}/${tableName}`;
-
-            try {
-                const response = await fetch(url, {
-                    headers: {
-                        Authorization: `Bearer ${apiKey}`
-                    }
-                });
-
-                const data = await response.json();
-                const people = data.records;
-
-                const paidBySelect = document.getElementById('paidByInput');
-                const splitBetweenSelect = document.getElementById('splitBetweenInput');
-
-                people.forEach(person => {
-                    const name = person.fields.Name;
-                    const id = person.id;
-
-                    // Add to Paid By (single select)
-                    const option1 = document.createElement('option');
-                    option1.value = id;
-                    option1.textContent = name;
-                    paidBySelect.appendChild(option1);
-
-                    // Add to Split Between (multi-select)
-                    const option2 = document.createElement('option');
-                    option2.value = id;
-                    option2.textContent = name;
-                    splitBetweenSelect.appendChild(option2);
-                });
-
-            } catch (error) {
-                console.error('Error loading people from Airtable:', error);
+        // --- Airtable Data Management ---
+        function populatePeopleSelectors() {
+            paidByInput.innerHTML = '';
+            splitBetweenInput.innerHTML = '';
+            for (const id in allPeople) {
+                const person = allPeople[id];
+                const option1 = new Option(person.name, person.id);
+                const option2 = new Option(person.name, person.id);
+                paidByInput.appendChild(option1);
+                splitBetweenInput.appendChild(option2);
             }
+        }
+        
+        async function fetchBillsFromAirtable() {
+            const records = await fetchFromAirtable(AIRTABLE_BILLS_TABLE_NAME);
+            return records.map(record => ({
+                id: record.id,
+                totalAmount: record.fields['Total Amount'] || record.fields['Total Price'] || 0, // handles both field names
+                paidBy: record.fields['Paid by']?.[0],
+                splitBetween: record.fields['Split between'] || [],
+                settledBy: record.fields['Settled By'] || []
+            }));
         }
 
         async function saveExpenseToAirtable() {
@@ -492,48 +407,41 @@
             showLoader(true, "Saving expense...");
             saveBtn.disabled = true;
 
-            const apiKey = AIRTABLE_API_KEY;
-            const baseId = AIRTABLE_BASE_ID;
             const paidById = paidByInput.value;
             const splitBetweenIds = [...splitBetweenInput.selectedOptions].map(opt => opt.value);
+            const total = parseFloat(totalAmountP.textContent.replace('₹', ''));
 
+            if (!paidById || splitBetweenIds.length === 0 || isNaN(total) || total <= 0) {
+                alert("Please ensure you've selected who paid, who to split with, and that the total amount is valid.");
+                showLoader(false);
+                saveBtn.disabled = false;
+                return;
+            }
 
             try {
-                // Step 1: Create the main "Bill" record
-                const billRecord = await createAirtableRecord(
-                    apiKey, baseId, AIRTABLE_BILLS_TABLE_NAME,
-                    {
-                        "Title": billTitleInput.value || "Scanned Bill",
-                        "Date": new Date().toISOString().split('T')[0],
-                        "Paid by": [paidById], // ✅ only here
-                        "Split between": splitBetweenIds
-                    }
-                );
-                const billId = billRecord.id;
-
-
-                // Step 2: Create each "Item" record and link it to the Bill
-                const itemRecordsPayload = [...itemsList.querySelectorAll('.item-row')].map(row => {
-                    const name = row.querySelector('.item-name-input').value;
-                    const price = parseFloat(row.querySelector('.item-price-input').value);
-                    return {
-                        fields: {
-                            "Name": name,
-                            "Price": price,
-                            "Bill": [billId]
-                        }
-                    };
+                const billRecord = await createAirtableRecord(AIRTABLE_BILLS_TABLE_NAME, {
+                    "Title": billTitleInput.value || "Scanned Bill",
+                    "Date": new Date().toISOString().split('T')[0],
+                    "Total Amount": total,
+                    "Paid by": [paidById],
+                    "Split between": splitBetweenIds
                 });
+                
+                const itemRecordsPayload = [...itemsList.querySelectorAll('.item-row')].map(row => ({
+                    fields: {
+                        "Name": row.querySelector('.item-name-input').value,
+                        "Price": parseFloat(row.querySelector('.item-price-input').value),
+                        "Bill": [billRecord.id]
+                    }
+                }));
 
-                await createAirtableRecord(
-                    apiKey, baseId, AIRTABLE_ITEMS_TABLE_NAME,
-                    itemRecordsPayload, true
-                );
-
-                // Success! Reset the UI.
+                if (itemRecordsPayload.length > 0) {
+                     await createAirtableRecord(AIRTABLE_ITEMS_TABLE_NAME, itemRecordsPayload, true);
+                }
+               
+                await loadAndRenderDebts();
                 showSuccess("Expense saved successfully!");
-                setTimeout(resetUI, 2000);
-
+                setTimeout(resetUI, 1500);
             } catch (error) {
                 console.error("Error saving to Airtable:", error);
                 showError(`Airtable Error: ${error.message}`);
@@ -542,53 +450,58 @@
                 showLoader(false);
             }
         }
-
-
-        // --- Helper functions for Airtable ---
-        async function createAirtableRecord(apiKey, baseId, tableName, records, isBatch = false) {
-            const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
-            const payload = isBatch ? { records: records } : { fields: records };
-
-            const response = await fetch(url, {
+        
+        // Generic Airtable API Helpers
+        async function fetchFromAirtable(tableName) {
+            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`;
+            const response = await fetch(url, { headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}` } });
+            if (!response.ok) throw new Error(`Failed to fetch from ${tableName}`);
+            const data = await response.json();
+            return data.records;
+        }
+        
+        async function createAirtableRecord(tableName, records, isBatch = false) {
+             const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}`;
+             const payload = isBatch ? { records } : { fields: records };
+             const response = await fetch(url, {
                 method: 'POST',
-                headers: {
-                    'Authorization': `Bearer ${apiKey}`,
-                    'Content-Type': 'application/json'
-                },
+                headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' },
                 body: JSON.stringify(payload)
             });
+            if (!response.ok) { const err = await response.json(); throw new Error(err.error.message); }
+            return response.json();
+        }
 
-            if (!response.ok) {
-                const errorBody = await response.json();
-                throw new Error(errorBody.error.message || `Request failed with status ${response.status}`);
-            }
+        async function updateAirtableRecord(tableName, recordId, fieldsToUpdate) {
+            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${encodeURIComponent(tableName)}/${recordId}`;
+            const payload = { fields: fieldsToUpdate };
+             const response = await fetch(url, {
+                method: 'PATCH',
+                headers: { 'Authorization': `Bearer ${AIRTABLE_API_KEY}`, 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+            if (!response.ok) { const err = await response.json(); throw new Error(err.error.message); }
             return response.json();
         }
 
         // --- UI Rendering and Management ---
         function renderItems(items) {
-            itemsList.innerHTML = ''; // Clear previous items
+            itemsList.innerHTML = '';
             if (items.length === 0) {
-                itemsList.innerHTML = `<p class="text-center text-gray-500">No items were automatically detected. Please add them manually.</p>`;
+                 itemsList.innerHTML = `<p class="text-center text-gray-500">No items were automatically detected. Please add them manually.</p>`;
             } else {
                 items.forEach((item, index) => {
-                    const itemElement = createItemRow(item, index);
-                    itemsList.appendChild(itemElement);
+                    itemsList.appendChild(createItemRow(item));
                 });
             }
             updateTotal();
         }
-
         function addManualItem() {
-            const newItem = { item: '', price: 0 };
-            const newIndex = itemsList.querySelectorAll('.item-row').length;
-            const itemElement = createItemRow(newItem, newIndex);
-            itemsList.appendChild(itemElement);
-            itemElement.querySelector('.item-name-input').focus();
+            itemsList.appendChild(createItemRow({ item: '', price: 0 }));
+            itemsList.querySelector('.item-row:last-child .item-name-input').focus();
             updateTotal();
         }
-
-        function createItemRow(itemData, index) {
+        function createItemRow(itemData) {
             const div = document.createElement('div');
             div.className = 'item-row flex items-center space-x-2';
             div.innerHTML = `
@@ -602,19 +515,13 @@
             });
             return div;
         }
-
         function updateTotal() {
             let total = 0;
-            const priceInputs = itemsList.querySelectorAll('.item-price-input');
-            priceInputs.forEach(input => {
-                const price = parseFloat(input.value);
-                if (!isNaN(price)) {
-                    total += price;
-                }
+            itemsList.querySelectorAll('.item-row .item-price-input').forEach(input => {
+                total += parseFloat(input.value) || 0;
             });
-            totalAmountP.textContent = `$${total.toFixed(2)}`;
+            totalAmountP.textContent = `₹${total.toFixed(2)}`;
         }
-
         function resetUI() {
             verificationSection.classList.add('hidden');
             imagePreviewContainer.classList.add('hidden');
@@ -624,7 +531,6 @@
             imageBase64 = null;
             saveBtn.disabled = true;
         }
-
         function checkApiKeys(isScanning) {
             if (isScanning) {
                 if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
@@ -632,38 +538,38 @@
                     return false;
                 }
             } else {
-                if (!AIRTABLE_API_KEY || AIRTABLE_API_KEY === "YOUR_AIRTABLE_API_KEY_HERE" || !AIRTABLE_BASE_ID) {
+                 if (!AIRTABLE_API_KEY || AIRTABLE_API_KEY === "YOUR_AIRTABLE_API_KEY_HERE" || !AIRTABLE_BASE_ID) {
                     alert("Please set your Airtable API Key and Base ID in config.js");
                     return false;
                 }
             }
             return true;
         }
-
         function showLoader(show, text = "Loading...") {
             if (show) {
+                loader.parentElement.classList.remove('hidden');
                 loader.classList.remove('hidden');
                 statusP.textContent = text;
             } else {
-                loader.classList.add('hidden');
+                loader.parentElement.classList.add('hidden');
             }
         }
-
+        function showDebtLoader(show, text = "Loading debts...") {
+            if (show) debtsListDiv.innerHTML = `<p class="text-gray-500">${text}</p>`;
+        }
         function showError(message) {
-            loader.classList.add('hidden');
+            loader.parentElement.classList.add('hidden');
             resultsContainer.classList.add('hidden');
             errorResultDiv.textContent = message;
             errorResultDiv.classList.remove('hidden');
         }
-
         function showSuccess(message) {
+            verificationSection.classList.remove('hidden');
             errorResultDiv.classList.add('hidden');
-            loader.classList.add('hidden');
+            loader.parentElement.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
             statusP.textContent = message;
-            statusP.parentElement.classList.add('bg-green-100', 'text-green-700');
-            setTimeout(() => {
-                statusP.parentElement.classList.remove('bg-green-100', 'text-green-700');
-            }, 2000);
+            statusP.parentElement.classList.add('p-4', 'bg-green-100', 'text-green-700');
         }
 
     </script>
