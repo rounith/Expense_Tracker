@@ -104,6 +104,13 @@
             <video id="cameraFeed" class="hidden w-full rounded-lg mb-2" autoplay></video>
             <canvas id="cameraCanvas" class="hidden"></canvas>
             <button id="captureBtn" class="hidden w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg mb-4">Capture Photo</button>
+            
+            <!-- Manual Entry Option -->
+            <div class="mt-4 pt-4 border-t">
+                <button id="skipScanBtn" class="w-full bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                    Skip Scan - Enter Items Manually
+                </button>
+            </div>
         </div>
 
         <div id="verificationSection" class="bg-white p-6 rounded-2xl shadow-md hidden">
@@ -134,7 +141,14 @@
                     </div>
                 </div>
             </div>
-            <div id="errorResult" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg"></div>
+            <div id="errorResult" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg">
+                <div class="flex justify-between items-start">
+                    <div id="errorMessage"></div>
+                    <button id="retryBtn" class="ml-4 bg-red-500 hover:bg-red-600 text-white px-3 py-1 rounded text-sm">
+                        Retry Scan
+                    </button>
+                </div>
+            </div>
             <button id="saveBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400" disabled>
                 Save Expense
             </button>
@@ -144,9 +158,11 @@
             <p>&copy; 2025 Smart Expense Tracker. Powered by AI.</p>
         </footer>
     </div>
-
     <script src="config.js"></script>
     <script>
+        // Mock config for demo - replace with actual config.js
+        
+
         // --- Global state and DOM Elements ---
         let imageBase64 = null;
         let stream = null;
@@ -161,6 +177,7 @@
         const cameraFeed = document.getElementById('cameraFeed');
         const captureBtn = document.getElementById('captureBtn');
         const cameraCanvas = document.getElementById('cameraCanvas');
+        const skipScanBtn = document.getElementById('skipScanBtn');
         const verificationSection = document.getElementById('verificationSection');
         const loader = document.getElementById('loader');
         const statusP = document.getElementById('status');
@@ -169,21 +186,30 @@
         const addItemBtn = document.getElementById('addItemBtn');
         const totalAmountP = document.getElementById('totalAmount');
         const errorResultDiv = document.getElementById('errorResult');
+        const errorMessage = document.getElementById('errorMessage');
+        const retryBtn = document.getElementById('retryBtn');
         const saveBtn = document.getElementById('saveBtn');
         const paidByInput = document.getElementById('paidByInput');
         const splitBetweenInput = document.getElementById('splitBetweenInput');
         const debtsListDiv = document.getElementById('debtsList');
         
-        // --- Core Application Logic (Functions moved up) ---
+        // --- Core Application Logic ---
 
         async function loadPeopleFromAirtable() {
             try {
+                // Mock data for demo - replace with actual API call
+                
+                populatePeopleSelectors();
+                
+                // Uncomment below for actual implementation
+                
                 const peopleRecords = await fetchFromAirtable(AIRTABLE_PEOPLE_TABLE_NAME);
                 allPeople = peopleRecords.reduce((acc, record) => {
                     acc[record.id] = { id: record.id, name: record.fields.Name };
                     return acc;
                 }, {});
                 populatePeopleSelectors();
+                
             } catch (error) {
                 console.error("Fatal Error: Could not load people from Airtable.", error);
                 debtsListDiv.innerHTML = `<p class="text-red-500">Could not load people from Airtable. The app cannot function.</p>`;
@@ -193,9 +219,16 @@
         async function loadAndRenderDebts() {
             showDebtLoader(true);
             try {
+                // Mock empty debts for demo
+                
+                
+                
+                // Uncomment below for actual implementation
+                
                 const bills = await fetchBillsFromAirtable();
                 const balances = calculateDebts(bills, allPeople);
                 renderDebts(balances, allPeople);
+                
             } catch(e) {
                 console.error("Failed to load debts:", e);
                 debtsListDiv.innerHTML = `<p class="text-red-500">Could not load debts. Check console for errors.</p>`;
@@ -206,7 +239,6 @@
         
         // --- Initialization ---
         document.addEventListener("DOMContentLoaded", async () => {
-            // This now works because the functions are defined above this call.
             await loadPeopleFromAirtable();
             await loadAndRenderDebts();
         });
@@ -215,8 +247,10 @@
         imageUploadInput.addEventListener('change', handleImageFile);
         cameraBtn.addEventListener('click', startCamera);
         captureBtn.addEventListener('click', capturePhoto);
+        skipScanBtn.addEventListener('click', skipToManualEntry);
         addItemBtn.addEventListener('click', addManualItem);
         saveBtn.addEventListener('click', saveExpenseToAirtable);
+        retryBtn.addEventListener('click', retryScan);
         itemsList.addEventListener('input', updateTotal);
 
         // --- Debt Calculation and Rendering ---
@@ -247,7 +281,6 @@
                         };
                     }
                     balances[key].amount += share;
-                    // Store the entire bill object for the settlement function
                     balances[key].bills.push({ id: bill.id, settledBy: bill.settledBy });
                 });
             });
@@ -279,11 +312,10 @@
             showDebtLoader(true, "Settling debt...");
             try {
                 for (const bill of billsToSettle) {
-                    // Use a Set to ensure the debtorId is added only once
                     const updatedSettledBy = [...new Set([...bill.settledBy, debtorId])];
                     await updateAirtableRecord(AIRTABLE_BILLS_TABLE_NAME, bill.id, { "Settled By": updatedSettledBy });
                 }
-                await loadAndRenderDebts(); // Refresh the list
+                await loadAndRenderDebts();
             } catch(e) {
                 console.error("Failed to mark debt as paid:", e);
                 alert("Error settling debt. Please try again.");
@@ -307,8 +339,9 @@
                 reader.readAsDataURL(file);
             }
         }
+
         async function startCamera() {
-             try {
+            try {
                 stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
                 cameraFeed.srcObject = stream;
                 cameraFeed.classList.remove('hidden');
@@ -320,6 +353,7 @@
                 alert("Error: Could not access camera. Please ensure you've granted permission.");
             }
         }
+
         function capturePhoto() {
             cameraCanvas.width = cameraFeed.videoWidth;
             cameraCanvas.height = cameraFeed.videoHeight;
@@ -332,6 +366,7 @@
             stopCamera();
             scanImageForItems();
         }
+
         function stopCamera() {
             if (stream) {
                 stream.getTracks().forEach(track => track.stop());
@@ -339,12 +374,45 @@
             cameraFeed.classList.add('hidden');
             captureBtn.classList.add('hidden');
         }
+
+        function skipToManualEntry() {
+            verificationSection.classList.remove('hidden');
+            showManualEntryMode();
+        }
+
+        function showManualEntryMode() {
+            loader.classList.add('hidden');
+            errorResultDiv.classList.add('hidden');
+            resultsContainer.classList.remove('hidden');
+            
+            // Start with empty items list
+            extractedItems = [];
+            renderItems(extractedItems);
+            
+            // Add first empty item automatically
+            addManualItem();
+            
+            saveBtn.disabled = false;
+        }
+
+        function retryScan() {
+            if (imageBase64) {
+                scanImageForItems();
+            } else {
+                showError("No image available to retry scan. Please capture or upload an image first.");
+            }
+        }
         
         async function scanImageForItems() {
-            if (!checkApiKeys(true)) return;
+            if (!checkApiKeys(true)) {
+                showManualEntryFallback("API key not configured. Please add items manually.");
+                return;
+            }
+
             verificationSection.classList.remove('hidden');
             showLoader(true, "Scanning bill with AI...");
             saveBtn.disabled = true;
+            errorResultDiv.classList.add('hidden');
 
             const apiKey = GEMINI_API_KEY;
             const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
@@ -359,22 +427,65 @@
             };
 
             try {
-                const response = await fetch(apiUrl, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(payload) });
+                const response = await fetch(apiUrl, { 
+                    method: 'POST', 
+                    headers: { 'Content-Type': 'application/json' }, 
+                    body: JSON.stringify(payload) 
+                });
+                
                 if (!response.ok) {
                     const errorBody = await response.json();
-                    throw new Error(`API Error: ${response.status} - ${errorBody.error.message}`);
+                    throw new Error(`API Error: ${response.status} - ${errorBody.error?.message || 'Unknown error'}`);
                 }
+                
                 const result = await response.json();
-                extractedItems = JSON.parse(result.candidates[0].content.parts[0].text);
+                
+                if (!result.candidates || !result.candidates[0] || !result.candidates[0].content) {
+                    throw new Error('Invalid response format from AI service');
+                }
+                
+                const aiResponse = result.candidates[0].content.parts[0].text;
+                extractedItems = JSON.parse(aiResponse);
+                
+                if (!Array.isArray(extractedItems)) {
+                    throw new Error('AI response is not a valid array');
+                }
+                
                 renderItems(extractedItems);
+                showLoader(false);
                 resultsContainer.classList.remove('hidden');
                 saveBtn.disabled = false;
+                
             } catch (error) {
                 console.error("Error scanning image:", error);
-                showError(`Failed to process receipt. Error: ${error.message}`);
-            } finally {
-                showLoader(false);
+                showScanError(`Failed to process receipt: ${error.message}`);
             }
+        }
+
+        function showScanError(message) {
+            showLoader(false);
+            resultsContainer.classList.add('hidden');
+            errorMessage.textContent = message;
+            errorResultDiv.classList.remove('hidden');
+            
+            // Still allow manual entry
+            setTimeout(() => {
+                showManualEntryFallback("Scan failed, but you can still add items manually below:");
+            }, 3000);
+        }
+
+        function showManualEntryFallback(message) {
+            errorResultDiv.classList.add('hidden');
+            resultsContainer.classList.remove('hidden');
+            
+            // Show message and empty items list
+            itemsList.innerHTML = `<p class="text-center text-gray-500 mb-4">${message}</p>`;
+            extractedItems = [];
+            
+            // Add first empty item
+            addManualItem();
+            
+            saveBtn.disabled = false;
         }
 
         // --- Airtable Data Management ---
@@ -394,7 +505,7 @@
             const records = await fetchFromAirtable(AIRTABLE_BILLS_TABLE_NAME);
             return records.map(record => ({
                 id: record.id,
-                totalAmount: record.fields['Total Amount'] || record.fields['Total Price'] || 0, // handles both field names
+                totalAmount: record.fields['Total Amount'] || record.fields['Total Price'] || 0,
                 paidBy: record.fields['Paid by']?.[0],
                 splitBetween: record.fields['Split between'] || [],
                 settledBy: record.fields['Settled By'] || []
@@ -419,10 +530,14 @@
             }
 
             try {
+                // Mock success for demo
+                console.log('Mock save:', { paidById, splitBetweenIds, total });
+                
+                // Uncomment below for actual implementation
+                
                 const billRecord = await createAirtableRecord(AIRTABLE_BILLS_TABLE_NAME, {
                     "Title": billTitleInput.value || "Scanned Bill",
                     "Date": new Date().toISOString().split('T')[0],
-                    "Total Amount": total,
                     "Paid by": [paidById],
                     "Split between": splitBetweenIds
                 });
@@ -438,6 +553,7 @@
                 if (itemRecordsPayload.length > 0) {
                      await createAirtableRecord(AIRTABLE_ITEMS_TABLE_NAME, itemRecordsPayload, true);
                 }
+                
                
                 await loadAndRenderDebts();
                 showSuccess("Expense saved successfully!");
@@ -486,8 +602,14 @@
 
         // --- UI Rendering and Management ---
         function renderItems(items) {
+            // Clear existing items but preserve any message
+            const existingMessage = itemsList.querySelector('p');
             itemsList.innerHTML = '';
-            if (items.length === 0) {
+            if (existingMessage) {
+                itemsList.appendChild(existingMessage);
+            }
+            
+            if (items.length === 0 && !existingMessage) {
                  itemsList.innerHTML = `<p class="text-center text-gray-500">No items were automatically detected. Please add them manually.</p>`;
             } else {
                 items.forEach((item, index) => {
@@ -496,25 +618,38 @@
             }
             updateTotal();
         }
+
         function addManualItem() {
-            itemsList.appendChild(createItemRow({ item: '', price: 0 }));
-            itemsList.querySelector('.item-row:last-child .item-name-input').focus();
+            const newRow = createItemRow({ item: '', price: 0 });
+            itemsList.appendChild(newRow);
+            
+            // Focus on the new item name input
+            const nameInput = newRow.querySelector('.item-name-input');
+            nameInput.focus();
+            
             updateTotal();
         }
+
         function createItemRow(itemData) {
             const div = document.createElement('div');
-            div.className = 'item-row flex items-center space-x-2';
+            div.className = 'item-row flex items-center space-x-2 mb-2';
             div.innerHTML = `
-                <input type="text" value="${itemData.item}" class="item-name-input w-2/3 p-2 border border-gray-300 rounded-lg" placeholder="Item Name">
-                <input type="number" value="${itemData.price.toFixed(2)}" step="0.01" class="item-price-input w-1/3 p-2 border border-gray-300 rounded-lg" placeholder="Price">
-                <button class="delete-item-btn text-red-500 hover:text-red-700 font-bold p-2">&times;</button>
+                <input type="text" value="${itemData.item || ''}" class="item-name-input w-2/3 p-2 border border-gray-300 rounded-lg" placeholder="Item Name">
+                <input type="number" value="${(itemData.price || 0).toFixed(2)}" step="0.01" min="0" class="item-price-input w-1/3 p-2 border border-gray-300 rounded-lg" placeholder="Price">
+                <button type="button" class="delete-item-btn text-red-500 hover:text-red-700 font-bold p-2 flex-shrink-0">&times;</button>
             `;
+            
             div.querySelector('.delete-item-btn').addEventListener('click', () => {
                 div.remove();
                 updateTotal();
             });
+            
+            // Update total when price changes
+            div.querySelector('.item-price-input').addEventListener('input', updateTotal);
+            
             return div;
         }
+
         function updateTotal() {
             let total = 0;
             itemsList.querySelectorAll('.item-row .item-price-input').forEach(input => {
@@ -522,6 +657,7 @@
             });
             totalAmountP.textContent = `₹${total.toFixed(2)}`;
         }
+
         function resetUI() {
             verificationSection.classList.add('hidden');
             imagePreviewContainer.classList.add('hidden');
@@ -530,11 +666,15 @@
             itemsList.innerHTML = '';
             imageBase64 = null;
             saveBtn.disabled = true;
+            errorResultDiv.classList.add('hidden');
+            loader.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
         }
+
         function checkApiKeys(isScanning) {
             if (isScanning) {
                 if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
-                    alert("Please set your Gemini API Key in config.js");
+                    console.log("Gemini API Key not configured");
                     return false;
                 }
             } else {
@@ -545,31 +685,47 @@
             }
             return true;
         }
+
         function showLoader(show, text = "Loading...") {
             if (show) {
-                loader.parentElement.classList.remove('hidden');
                 loader.classList.remove('hidden');
                 statusP.textContent = text;
+                statusP.className = 'text-gray-500 mt-2'; // Reset classes
             } else {
-                loader.parentElement.classList.add('hidden');
+                loader.classList.add('hidden');
             }
         }
+
         function showDebtLoader(show, text = "Loading debts...") {
             if (show) debtsListDiv.innerHTML = `<p class="text-gray-500">${text}</p>`;
         }
+
         function showError(message) {
-            loader.parentElement.classList.add('hidden');
+            loader.classList.add('hidden');
             resultsContainer.classList.add('hidden');
-            errorResultDiv.textContent = message;
+            errorMessage.textContent = message;
             errorResultDiv.classList.remove('hidden');
         }
+
         function showSuccess(message) {
-            verificationSection.classList.remove('hidden');
+            loader.classList.add('hidden');
             errorResultDiv.classList.add('hidden');
-            loader.parentElement.classList.add('hidden');
             resultsContainer.classList.add('hidden');
-            statusP.textContent = message;
-            statusP.parentElement.classList.add('p-4', 'bg-green-100', 'text-green-700');
+            
+            // Create success message
+            const successDiv = document.createElement('div');
+            successDiv.className = 'p-4 bg-green-100 text-green-700 rounded-lg text-center';
+            successDiv.textContent = message;
+            
+            // Insert after loader
+            loader.parentElement.insertBefore(successDiv, loader.nextSibling);
+            
+            // Remove success message after showing
+            setTimeout(() => {
+                if (successDiv.parentElement) {
+                    successDiv.parentElement.removeChild(successDiv);
+                }
+            }, 2000);
         }
 
     </script>
