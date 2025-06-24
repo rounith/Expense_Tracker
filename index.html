@@ -82,6 +82,8 @@
                 class="hidden w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg mb-4">Capture
                 Photo</button>
         </div>
+        <h2>Who Owes Whom</h2>
+        <div id="debtsList">Loading...</div>
 
         <div id="verificationSection" class="bg-white p-6 rounded-2xl shadow-md hidden">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-3">2. Verify Extracted Items</h2>
@@ -120,6 +122,9 @@
                 disabled>
                 Save Expense to Airtable
             </button>
+
+
+
         </div>
 
         <footer class="text-center mt-8 text-sm text-gray-500">
@@ -218,6 +223,105 @@
             cameraFeed.classList.add('hidden');
             captureBtn.classList.add('hidden');
         }
+
+        // Calculate total amount from items
+        async function fetchBillsFromAirtable() {
+            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_BILLS_TABLE_NAME}?view=Grid%20view`;
+
+            const res = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${AIRTABLE_API_KEY}`
+                }
+            });
+
+            const data = await res.json();
+            return data.records.map(record => ({
+                totalAmount: record.fields['Total Price'],
+                paidBy: record.fields['Paid by']?.[0], // record ID
+                splitBetween: record.fields['Split between'] || [], // array of record IDs
+                id: record.id
+            }));
+        }
+
+        async function fetchPeopleFromAirtable() {
+            const url = `https://api.airtable.com/v0/${AIRTABLE_BASE_ID}/${AIRTABLE_PEOPLE_TABLE_NAME}`;
+            const res = await fetch(url, {
+                headers: {
+                    Authorization: `Bearer ${AIRTABLE_API_KEY}`
+                }
+            });
+
+            const data = await res.json();
+            // Map of person ID → { id, name }
+            const peopleMap = {};
+            data.records.forEach(record => {
+                peopleMap[record.id] = { id: record.id, name: record.fields['Name'] };
+            });
+            return peopleMap;
+        }
+
+        function calculateDebts(bills, peopleMap) {
+            const balances = {}; // { personId: { name, owes: { toPersonId: amount } } }
+
+            bills.forEach(bill => {
+                const total = bill.totalAmount;
+                const paidBy = bill.paidBy;
+                const paidByName = peopleMap[paidBy]?.name || 'Unknown';
+
+                const splitBetween = bill.splitBetween;
+                const share = total / splitBetween.length;
+
+                splitBetween.forEach(personId => {
+                    if (personId === paidBy) return;
+
+                    if (!balances[personId]) {
+                        balances[personId] = { name: peopleMap[personId]?.name || 'Unknown', owes: {} };
+                    }
+
+                    if (!balances[personId].owes[paidBy]) {
+                        balances[personId].owes[paidBy] = 0;
+                    }
+
+                    balances[personId].owes[paidBy] += share;
+                });
+            });
+
+            return balances;
+        }
+
+        function renderDebts(balances, peopleMap) {
+            const container = document.getElementById("debtsList");
+            container.innerHTML = '';
+
+            let hasDebts = false;
+
+            Object.entries(balances).forEach(([personId, data]) => {
+                Object.entries(data.owes).forEach(([toId, amount]) => {
+                    const debtor = data.name;
+                    const creditor = peopleMap[toId]?.name || 'Someone';
+                    const row = document.createElement('div');
+                    row.textContent = `${debtor} owes ${creditor}: ₹${amount.toFixed(2)}`;
+                    container.appendChild(row);
+                    hasDebts = true;
+                });
+            });
+
+            if (!hasDebts) {
+                container.innerHTML = '🎉 No one owes anyone!';
+            }
+        }
+
+        async function loadAndRenderDebts() {
+            const [bills, peopleMap] = await Promise.all([
+                fetchBillsFromAirtable(),
+                fetchPeopleFromAirtable()
+            ]);
+
+            const balances = calculateDebts(bills, peopleMap);
+            renderDebts(balances, peopleMap);
+        }
+
+        document.addEventListener("DOMContentLoaded", loadAndRenderDebts);
 
         // --- Core AI & Data Functions ---
 
