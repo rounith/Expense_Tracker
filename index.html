@@ -12,6 +12,18 @@
             font-family: 'Inter', sans-serif;
         }
 
+        .debt-row {
+            margin-bottom: 8px;
+            font-family: sans-serif;
+        }
+
+        .debt-row button {
+            padding: 4px 8px;
+            font-size: 0.9em;
+            cursor: pointer;
+            color: red;
+        }
+
         .loader {
             border-top-color: #3498db;
             -webkit-animation: spin 1s linear infinite;
@@ -299,8 +311,25 @@
                 Object.entries(data.owes).forEach(([toId, amount]) => {
                     const debtor = data.name;
                     const creditor = peopleMap[toId]?.name || 'Someone';
+
                     const row = document.createElement('div');
-                    row.textContent = `${debtor} owes ${creditor}: ₹${amount.toFixed(2)}`;
+                    row.classList.add('debt-row');
+
+                    // Add text
+                    const text = document.createElement('span');
+                    text.textContent = `${debtor} owes ${creditor}: ₹${amount.toFixed(2)}`;
+                    row.appendChild(text);
+
+                    // Add "Mark as Paid" button
+                    const button = document.createElement('button');
+                    button.textContent = 'Mark as Paid';
+                    button.style.marginLeft = '12px';
+                    button.onclick = () => {
+                        row.remove(); // 🧹 remove the row visually
+                        // Optionally: call backend or update Airtable
+                    };
+                    row.appendChild(button);
+
                     container.appendChild(row);
                     hasDebts = true;
                 });
@@ -310,6 +339,7 @@
                 container.innerHTML = '🎉 No one owes anyone!';
             }
         }
+
 
         async function loadAndRenderDebts() {
             const [bills, peopleMap] = await Promise.all([
