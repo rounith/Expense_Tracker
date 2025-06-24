@@ -1,0 +1,522 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Smart Expense Tracker</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+        }
+
+        .loader {
+            border-top-color: #3498db;
+            -webkit-animation: spin 1s linear infinite;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            0% {
+                transform: rotate(0deg);
+            }
+
+            100% {
+                transform: rotate(360deg);
+            }
+        }
+    </style>
+</head>
+
+<body class="bg-gray-100 text-gray-800">
+
+    <div class="container mx-auto p-4 md:p-8 max-w-2xl">
+        <header class="text-center mb-8">
+            <h1 class="text-4xl font-bold text-gray-900">Smart Expense Tracker</h1>
+            <p class="text-gray-600 mt-2">Scan your bill, extract items with AI, and save to Airtable.</p>
+        </header>
+
+        <div class="bg-yellow-100 border-l-4 border-yellow-500 text-yellow-700 p-4 rounded-lg mb-6" role="alert">
+            <p class="font-bold">Configuration</p>
+            <p>Your API keys are loaded from the <code>config.js</code> file. Make sure you've entered your
+                credentials there.</p>
+        </div>
+
+        <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">1. Scan Your Bill</h2>
+
+            <div class="mb-4">
+                <label for="billTitle" class="block text-sm font-medium text-gray-700 mb-1">Bill Title
+                    (Optional)</label>
+                <input type="text" id="billTitle"
+                    class="w-full p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                    placeholder="e.g., Lunch with team, Weekly Groceries">
+            </div>
+
+            <div class="mb-4">
+                <label class="block text-sm font-medium text-gray-700 mb-2">Upload or Capture Bill Image</label>
+                <input type="file" id="imageUpload" accept="image/*" class="hidden">
+                <div class="flex items-center space-x-4">
+                    <button onclick="document.getElementById('imageUpload').click()"
+                        class="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Upload Image
+                    </button>
+                    <button id="cameraBtn"
+                        class="w-full bg-green-500 hover:bg-green-600 text-white font-bold py-2 px-4 rounded-lg transition-colors">
+                        Use Camera
+                    </button>
+                </div>
+            </div>
+
+            <div id="imagePreviewContainer" class="mb-4 hidden text-center">
+                <img id="imagePreview" src="#" alt="Image Preview"
+                    class="max-w-full h-auto mx-auto rounded-lg shadow-inner border border-gray-200"
+                    style="max-height: 400px;" />
+            </div>
+
+            <video id="cameraFeed" class="hidden w-full rounded-lg mb-2" autoplay></video>
+            <canvas id="cameraCanvas" class="hidden"></canvas>
+            <button id="captureBtn"
+                class="hidden w-full bg-indigo-500 hover:bg-indigo-600 text-white font-bold py-2 px-4 rounded-lg mb-4">Capture
+                Photo</button>
+        </div>
+
+        <div id="verificationSection" class="bg-white p-6 rounded-2xl shadow-md hidden">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">2. Verify Extracted Items</h2>
+
+            <div id="loader" class="text-center p-4">
+                <div class="loader ease-linear rounded-full border-4 border-t-4 border-gray-200 h-12 w-12 mx-auto">
+                </div>
+                <p id="status" class="text-gray-500 mt-2">Scanning bill with AI...</p>
+            </div>
+
+            <div id="resultsContainer" class="hidden">
+                <div id="itemsList" class="space-y-3">
+                </div>
+                <div class="flex justify-between items-center mt-4 pt-4 border-t-2">
+                    <button id="addItemBtn"
+                        class="bg-gray-200 hover:bg-gray-300 text-gray-700 font-bold py-2 px-4 rounded-lg text-sm">+ Add
+                        Item</button>
+                    <div class="text-right">
+                        <p class="text-gray-600 font-medium">Total</p>
+                        <p id="totalAmount" class="text-2xl font-bold">$0.00</p>
+                    </div>
+                </div>
+            </div>
+
+            <div id="errorResult" class="hidden mt-4 p-4 bg-red-100 text-red-700 rounded-lg"></div>
+
+            <label>Paid by:</label>
+            <select id="paidByInput"></select>
+
+            <label>Split between:</label>
+            <select id="splitBetweenInput" multiple></select>
+
+
+            <button id="saveBtn"
+                class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400"
+                disabled>
+                Save Expense to Airtable
+            </button>
+        </div>
+
+        <footer class="text-center mt-8 text-sm text-gray-500">
+            <p>&copy; 2024 Smart Expense Tracker. Powered by AI.</p>
+        </footer>
+    </div>
+
+    <script src="config.js"></script>
+    <script>
+        document.addEventListener("DOMContentLoaded", () => {
+            loadPeopleFromAirtable();
+        });
+
+        // DOM Elements
+        const billTitleInput = document.getElementById('billTitle');
+        const imageUploadInput = document.getElementById('imageUpload');
+        const imagePreviewContainer = document.getElementById('imagePreviewContainer');
+        const imagePreview = document.getElementById('imagePreview');
+        const cameraBtn = document.getElementById('cameraBtn');
+        const cameraFeed = document.getElementById('cameraFeed');
+        const captureBtn = document.getElementById('captureBtn');
+        const cameraCanvas = document.getElementById('cameraCanvas');
+
+        const verificationSection = document.getElementById('verificationSection');
+        const loader = document.getElementById('loader');
+        const statusP = document.getElementById('status');
+        const resultsContainer = document.getElementById('resultsContainer');
+        const itemsList = document.getElementById('itemsList');
+        const addItemBtn = document.getElementById('addItemBtn');
+        const totalAmountP = document.getElementById('totalAmount');
+        const errorResultDiv = document.getElementById('errorResult');
+        const saveBtn = document.getElementById('saveBtn');
+
+        let imageBase64 = null;
+        let stream = null;
+        let extractedItems = [];
+
+
+        // --- Event Listeners ---
+        imageUploadInput.addEventListener('change', handleImageFile);
+        cameraBtn.addEventListener('click', startCamera);
+        captureBtn.addEventListener('click', capturePhoto);
+        addItemBtn.addEventListener('click', addManualItem);
+        saveBtn.addEventListener('click', saveExpenseToAirtable);
+        itemsList.addEventListener('input', updateTotal); // Use event delegation for dynamic inputs
+
+
+        function handleImageFile(event) {
+            const file = event.target.files[0];
+            if (file) {
+                stopCamera();
+                const reader = new FileReader();
+                reader.onload = (e) => {
+                    imagePreview.src = e.target.result;
+                    imagePreviewContainer.classList.remove('hidden');
+                    imageBase64 = e.target.result.split(',')[1];
+                    scanImageForItems();
+                };
+                reader.readAsDataURL(file);
+            }
+        }
+
+        async function startCamera() {
+            try {
+                stream = await navigator.mediaDevices.getUserMedia({ video: { facingMode: 'environment' } });
+                cameraFeed.srcObject = stream;
+                cameraFeed.classList.remove('hidden');
+                captureBtn.classList.remove('hidden');
+                imagePreviewContainer.classList.add('hidden');
+                verificationSection.classList.add('hidden');
+            } catch (err) {
+                console.error("Error accessing camera: ", err);
+                alert("Error: Could not access camera. Please ensure you've granted permission.");
+            }
+        }
+
+        function capturePhoto() {
+            cameraCanvas.width = cameraFeed.videoWidth;
+            cameraCanvas.height = cameraFeed.videoHeight;
+            const context = cameraCanvas.getContext('2d');
+            context.drawImage(cameraFeed, 0, 0, cameraCanvas.width, cameraCanvas.height);
+
+            const dataUrl = cameraCanvas.toDataURL('image/png');
+            imagePreview.src = dataUrl;
+            imagePreviewContainer.classList.remove('hidden');
+            imageBase64 = dataUrl.split(',')[1];
+
+            stopCamera();
+            scanImageForItems();
+        }
+
+        function stopCamera() {
+            if (stream) {
+                stream.getTracks().forEach(track => track.stop());
+            }
+            cameraFeed.classList.add('hidden');
+            captureBtn.classList.add('hidden');
+        }
+
+        // --- Core AI & Data Functions ---
+
+        async function scanImageForItems() {
+            if (!checkApiKeys(true)) return;
+            if (!imageBase64) {
+                alert("No image selected to scan.");
+                return;
+            }
+
+            // Show verification section and loader
+            verificationSection.classList.remove('hidden');
+            loader.classList.remove('hidden');
+            resultsContainer.classList.add('hidden');
+            errorResultDiv.classList.add('hidden');
+            statusP.textContent = "Scanning bill with AI...";
+            saveBtn.disabled = true;
+
+            const apiKey = GEMINI_API_KEY;
+            const apiUrl = `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash-latest:generateContent?key=${apiKey}`;
+
+            const payload = {
+                contents: [{
+                    parts: [
+                        {
+                            text: `You are an expert receipt data extraction service. Analyze the attached receipt image. Extract all line items and their prices. 
+                        Your response MUST be a valid JSON array of objects. Each object must have two keys: "item" (string) and "price" (number).
+                        In the end i want you to include taxes (Calculate total taxes and tips) as well, if they are present in the receipt.
+                        Do not include total, or any non-item lines. If you cannot find any items, return an empty array [].
+
+                        Example response:
+                        [
+                            {"item": "Latte", "price": 4.50},
+                            {"item": "Avocado Toast", "price": 12.00}
+                            {"item": "Tax", "price": 1.50},
+                            {"item": "Tip", "price": 2.00}
+                        ]
+                        `},
+                        { inline_data: { mime_type: "image/png", data: imageBase64 } }
+                    ]
+                }],
+                generationConfig: {
+                    "responseMimeType": "application/json",
+                    "maxOutputTokens": 2048
+                }
+            };
+
+            try {
+                const response = await fetch(apiUrl, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!response.ok) {
+                    const errorBody = await response.json();
+                    throw new Error(`API Error: ${response.status} - ${errorBody.error.message}`);
+                }
+
+                const result = await response.json();
+                const text = result.candidates[0].content.parts[0].text;
+                extractedItems = JSON.parse(text);
+
+                renderItems(extractedItems);
+                loader.classList.add('hidden');
+                resultsContainer.classList.remove('hidden');
+                saveBtn.disabled = false;
+
+            } catch (error) {
+                console.error("Error scanning image:", error);
+                showError(`Failed to process receipt. Error: ${error.message}`);
+            }
+        }
+        // --- Airtable Integration ---
+
+        // Load people from Airtable when the page loads
+        async function loadPeopleFromAirtable() {
+            const apiKey = AIRTABLE_API_KEY;
+            const baseId = AIRTABLE_BASE_ID;
+            const tableName = AIRTABLE_PEOPLE_TABLE_NAME;
+
+            const url = `https://api.airtable.com/v0/${baseId}/${tableName}`;
+
+            try {
+                const response = await fetch(url, {
+                    headers: {
+                        Authorization: `Bearer ${apiKey}`
+                    }
+                });
+
+                const data = await response.json();
+                const people = data.records;
+
+                const paidBySelect = document.getElementById('paidByInput');
+                const splitBetweenSelect = document.getElementById('splitBetweenInput');
+
+                people.forEach(person => {
+                    const name = person.fields.Name;
+                    const id = person.id;
+
+                    // Add to Paid By (single select)
+                    const option1 = document.createElement('option');
+                    option1.value = id;
+                    option1.textContent = name;
+                    paidBySelect.appendChild(option1);
+
+                    // Add to Split Between (multi-select)
+                    const option2 = document.createElement('option');
+                    option2.value = id;
+                    option2.textContent = name;
+                    splitBetweenSelect.appendChild(option2);
+                });
+
+            } catch (error) {
+                console.error('Error loading people from Airtable:', error);
+            }
+        }
+
+        async function saveExpenseToAirtable() {
+            if (!checkApiKeys(false)) return;
+
+            showLoader(true, "Saving expense...");
+            saveBtn.disabled = true;
+
+            const apiKey = AIRTABLE_API_KEY;
+            const baseId = AIRTABLE_BASE_ID;
+            const paidById = paidByInput.value;
+            const splitBetweenIds = [...splitBetweenInput.selectedOptions].map(opt => opt.value);
+
+
+            try {
+                // Step 1: Create the main "Bill" record
+                const billRecord = await createAirtableRecord(
+                    apiKey, baseId, AIRTABLE_BILLS_TABLE_NAME,
+                    {
+                        "Title": billTitleInput.value || "Scanned Bill",
+                        "Date": new Date().toISOString().split('T')[0],
+                        "Paid by": [paidById], // ✅ only here
+                        "Split between": splitBetweenIds
+                    }
+                );
+                const billId = billRecord.id;
+
+
+                // Step 2: Create each "Item" record and link it to the Bill
+                const itemRecordsPayload = [...itemsList.querySelectorAll('.item-row')].map(row => {
+                    const name = row.querySelector('.item-name-input').value;
+                    const price = parseFloat(row.querySelector('.item-price-input').value);
+                    return {
+                        fields: {
+                            "Name": name,
+                            "Price": price,
+                            "Bill": [billId]
+                        }
+                    };
+                });
+
+                await createAirtableRecord(
+                    apiKey, baseId, AIRTABLE_ITEMS_TABLE_NAME,
+                    itemRecordsPayload, true
+                );
+
+                // Success! Reset the UI.
+                showSuccess("Expense saved successfully!");
+                setTimeout(resetUI, 2000);
+
+            } catch (error) {
+                console.error("Error saving to Airtable:", error);
+                showError(`Airtable Error: ${error.message}`);
+                saveBtn.disabled = false;
+            } finally {
+                showLoader(false);
+            }
+        }
+
+
+        // --- Helper functions for Airtable ---
+        async function createAirtableRecord(apiKey, baseId, tableName, records, isBatch = false) {
+            const url = `https://api.airtable.com/v0/${baseId}/${encodeURIComponent(tableName)}`;
+            const payload = isBatch ? { records: records } : { fields: records };
+
+            const response = await fetch(url, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${apiKey}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify(payload)
+            });
+
+            if (!response.ok) {
+                const errorBody = await response.json();
+                throw new Error(errorBody.error.message || `Request failed with status ${response.status}`);
+            }
+            return response.json();
+        }
+
+        // --- UI Rendering and Management ---
+        function renderItems(items) {
+            itemsList.innerHTML = ''; // Clear previous items
+            if (items.length === 0) {
+                itemsList.innerHTML = `<p class="text-center text-gray-500">No items were automatically detected. Please add them manually.</p>`;
+            } else {
+                items.forEach((item, index) => {
+                    const itemElement = createItemRow(item, index);
+                    itemsList.appendChild(itemElement);
+                });
+            }
+            updateTotal();
+        }
+
+        function addManualItem() {
+            const newItem = { item: '', price: 0 };
+            const newIndex = itemsList.querySelectorAll('.item-row').length;
+            const itemElement = createItemRow(newItem, newIndex);
+            itemsList.appendChild(itemElement);
+            itemElement.querySelector('.item-name-input').focus();
+            updateTotal();
+        }
+
+        function createItemRow(itemData, index) {
+            const div = document.createElement('div');
+            div.className = 'item-row flex items-center space-x-2';
+            div.innerHTML = `
+                <input type="text" value="${itemData.item}" class="item-name-input w-2/3 p-2 border border-gray-300 rounded-lg" placeholder="Item Name">
+                <input type="number" value="${itemData.price.toFixed(2)}" step="0.01" class="item-price-input w-1/3 p-2 border border-gray-300 rounded-lg" placeholder="Price">
+                <button class="delete-item-btn text-red-500 hover:text-red-700 font-bold p-2">&times;</button>
+            `;
+            div.querySelector('.delete-item-btn').addEventListener('click', () => {
+                div.remove();
+                updateTotal();
+            });
+            return div;
+        }
+
+        function updateTotal() {
+            let total = 0;
+            const priceInputs = itemsList.querySelectorAll('.item-price-input');
+            priceInputs.forEach(input => {
+                const price = parseFloat(input.value);
+                if (!isNaN(price)) {
+                    total += price;
+                }
+            });
+            totalAmountP.textContent = `$${total.toFixed(2)}`;
+        }
+
+        function resetUI() {
+            verificationSection.classList.add('hidden');
+            imagePreviewContainer.classList.add('hidden');
+            imagePreview.src = '#';
+            billTitleInput.value = '';
+            itemsList.innerHTML = '';
+            imageBase64 = null;
+            saveBtn.disabled = true;
+        }
+
+        function checkApiKeys(isScanning) {
+            if (isScanning) {
+                if (!GEMINI_API_KEY || GEMINI_API_KEY === "YOUR_GEMINI_API_KEY_HERE") {
+                    alert("Please set your Gemini API Key in config.js");
+                    return false;
+                }
+            } else {
+                if (!AIRTABLE_API_KEY || AIRTABLE_API_KEY === "YOUR_AIRTABLE_API_KEY_HERE" || !AIRTABLE_BASE_ID) {
+                    alert("Please set your Airtable API Key and Base ID in config.js");
+                    return false;
+                }
+            }
+            return true;
+        }
+
+        function showLoader(show, text = "Loading...") {
+            if (show) {
+                loader.classList.remove('hidden');
+                statusP.textContent = text;
+            } else {
+                loader.classList.add('hidden');
+            }
+        }
+
+        function showError(message) {
+            loader.classList.add('hidden');
+            resultsContainer.classList.add('hidden');
+            errorResultDiv.textContent = message;
+            errorResultDiv.classList.remove('hidden');
+        }
+
+        function showSuccess(message) {
+            errorResultDiv.classList.add('hidden');
+            loader.classList.add('hidden');
+            statusP.textContent = message;
+            statusP.parentElement.classList.add('bg-green-100', 'text-green-700');
+            setTimeout(() => {
+                statusP.parentElement.classList.remove('bg-green-100', 'text-green-700');
+            }, 2000);
+        }
+
+    </script>
+</body>
+
+</html>
