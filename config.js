@@ -9,10 +9,10 @@ const GEMINI_API_KEY = "AIzaSyA26nN0hiuLalOLpFQlY7pohxdYNAXL_X0";
 
 // --- Airtable Configuration ---
 // Get your key from your Airtable account settings: https://airtable.com/account
-const AIRTABLE_API_KEY = "patq1W0TcTkBr1gRq.94d324d781f12c536642969205ad7dad7fc9c9a442a0f85e76aba69defe7c976";
+const AIRTABLE_API_KEY = "patVM3CE3siChoPUk.4340a331964641a3844703589cc5043b698b00273227a837693cae7cccb27429";
 
 // Get this from the URL of your Airtable base (e.g., https://airtable.com/appXXXXXXXXXXXXXX)
-const AIRTABLE_BASE_ID = "appy3hwrXMGhVk7qT";
+const AIRTABLE_BASE_ID = "appFl4yXD2uJqb1hD";
 
 // The name of the table where you want to store your bills.
 const AIRTABLE_BILLS_TABLE_NAME = "Bills";

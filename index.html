@@ -55,20 +55,12 @@
 </head>
 
 <body class="bg-gray-100 text-gray-800">
-
     <div class="container mx-auto p-4 md:p-8 max-w-2xl">
         <header class="text-center mb-8">
             <h1 class="text-2xl font-bold text-gray-900">Smart Expense Tracker ft. Chikkmanguluru</h1>
             <p class="text-gray-600 mt-2">Scan bills, split costs, track debts, and settle up.</p>
         </header>
         
-        <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
-            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">Who Owes Whom</h2>
-            <div id="debtsList" class="min-h-[50px] flex items-center justify-center">
-                <p class="text-gray-500">Loading debts...</p>
-            </div>
-        </div>
-
         <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
             <h2 class="text-2xl font-semibold mb-4 border-b pb-3">1. Add a New Expense</h2>
             <div class="mb-4">
@@ -147,6 +139,12 @@
             <button id="saveBtn" class="w-full bg-purple-600 hover:bg-purple-700 text-white font-bold py-3 px-4 rounded-lg mt-6 transition-colors disabled:bg-gray-400" disabled>
                 Save Expense
             </button>
+        </div>
+        <div class="bg-white p-6 rounded-2xl shadow-md mb-6">
+            <h2 class="text-2xl font-semibold mb-4 border-b pb-3">Who Owes Whom</h2>
+            <div id="debtsList" class="min-h-[50px] flex items-center justify-center">
+                <p class="text-gray-500">Loading debts...</p>
+            </div>
         </div>
 
         <footer class="text-center mt-8 text-sm text-gray-500">
@@ -522,8 +520,6 @@
             try {
                 // Mock success for demo
                 console.log('Mock save:', { paidById, splitBetweenIds, total });
-                
-                // Uncomment below for actual implementation
                 
                 const billRecord = await createAirtableRecord(AIRTABLE_BILLS_TABLE_NAME, {
                     "Title": billTitleInput.value || "Scanned Bill",
