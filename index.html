@@ -150,7 +150,7 @@
         </div>
 
         <footer class="text-center mt-8 text-sm text-gray-500">
-            <p>&copy; 2025 Smart Expense Tracker. Powered by AI.</p>
+            <p>&copy; Smart Expense Tracker Built By <strong>Rounith</strong>. Powered by AI.</p>
         </footer>
     </div>
     <script src="config.js"></script>
@@ -214,11 +214,6 @@
         async function loadAndRenderDebts() {
             showDebtLoader(true);
             try {
-                // Mock empty debts for demo
-                
-                
-                
-                // Uncomment below for actual implementation
                 
                 const bills = await fetchBillsFromAirtable();
                 const balances = calculateDebts(bills, allPeople);
