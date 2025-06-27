@@ -1,4 +1,4 @@
-// Payment History Tracking Script
+// Enhanced Payment History Tracking Script with Real Bill Data
 // Add this to your existing JavaScript code
 
 // --- Payment History Management ---
@@ -48,7 +48,8 @@ async function markDebtAsPaidWithHistory(debtorId, creditorId, amount, billsToSe
             creditorName: allPeople[creditorId]?.name || 'Unknown',
             amount: amount,
             settledAt: new Date().toISOString(),
-            billIds: billsToSettle.map(bill => bill.id)
+            billIds: billsToSettle.map(bill => bill.id),
+            billTitles: billsToSettle.map(bill => bill.title || `Bill ${bill.id}`)
         };
         
         paymentHistory.unshift(settlement); // Add to beginning
@@ -152,6 +153,7 @@ function loadPaymentHistory() {
                     <span class="text-green-600">${settlement.creditorName}</span>
                 </div>
                 <div class="text-sm text-gray-500">${formattedDate} at ${formattedTime}</div>
+                ${settlement.billTitles ? `<div class="text-xs text-gray-400">${settlement.billTitles.join(', ')}</div>` : ''}
             </div>
             <div class="text-right">
                 <div class="font-bold text-green-600">₹${settlement.amount.toFixed(2)}</div>
@@ -332,17 +334,242 @@ async function fetchSingleAirtableRecord(tableName, recordId) {
     return await response.json();
 }
 
-// Initialize payment history on page load
-document.addEventListener("DOMContentLoaded", function() {
-    // Load payment history when the app starts
-    loadPaymentHistory();
-    
-    // Override the original renderDebts function
-    window.originalRenderDebts = window.renderDebts;
-    window.renderDebts = renderDebtsWithHistory;
-});
+// Enhanced function to fetch multiple records from Airtable with detailed bill info
+async function fetchMultipleAirtableRecords(tableName, recordIds) {
+    try {
+        const promises = recordIds.map(id => fetchSingleAirtableRecord(tableName, id));
+        const results = await Promise.all(promises);
+        return results.map(result => ({
+            id: result.id,
+            fields: result.fields
+        }));
+    } catch (error) {
+        console.error('Error fetching multiple records:', error);
+        throw error;
+    }
+}
 
-// Export settlement data (optional feature)
+// Enhanced function to calculate individual shares for each person in each bill
+function calculatePersonShare(bill, personId) {
+    const splitBetween = bill.fields['Split between'] || [];
+    const totalAmount = bill.fields['Total Amount'] || 0;
+    
+    if (!splitBetween.includes(personId)) {
+        return 0;
+    }
+    
+    // For equal split (most common case)
+    return totalAmount / splitBetween.length;
+}
+
+// ENHANCED: Show bill selection modal with real bill data from Airtable
+async function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) {
+    try {
+        showDebtLoader(true, "Loading bill details...");
+        
+        // Fetch detailed bill information from Airtable
+        const billIds = bills.map(bill => bill.id);
+        const detailedBills = await fetchMultipleAirtableRecords(AIRTABLE_BILLS_TABLE_NAME, billIds);
+        
+        // Create modal HTML
+        const modalHTML = `
+            <div id="billSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+                <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto">
+                    <h3 class="text-lg font-semibold mb-4">Select Bills to Settle</h3>
+                    <p class="text-sm text-gray-600 mb-4">
+                        <b>${allPeople[debtorId]?.name}</b> owes <b>${allPeople[creditorId]?.name}</b>
+                    </p>
+                    <div id="billCheckboxes" class="space-y-2 mb-4">
+                        <!-- Bills will be populated here -->
+                    </div>
+                    <div class="flex justify-between items-center pt-4 border-t">
+                        <div>
+                            <span class="text-sm text-gray-600">Selected: </span>
+                            <span id="selectedAmount" class="font-bold text-blue-600">₹0.00</span>
+                        </div>
+                        <div class="space-x-2">
+                            <button onclick="closeBillSelectionModal()" 
+                                    class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                                Cancel
+                            </button>
+                            <button id="settleSelectedBtn" onclick="settleSelectedBills()" 
+                                    class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded disabled:bg-gray-400" 
+                                    disabled>
+                                Settle Selected
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        `;
+        
+        // Add modal to page
+        document.body.insertAdjacentHTML('beforeend', modalHTML);
+        
+        // Populate bill checkboxes with real data
+        await populateBillCheckboxesWithRealData(detailedBills, debtorId, creditorId);
+        
+    } catch (error) {
+        console.error('Error loading bill selection modal:', error);
+        alert('Error loading bill details. Please try again.');
+    } finally {
+        showDebtLoader(false);
+    }
+}
+
+// ENHANCED: Populate bill checkboxes with real bill data from Airtable
+async function populateBillCheckboxesWithRealData(detailedBills, debtorId, creditorId) {
+    const checkboxContainer = document.getElementById('billCheckboxes');
+    
+    if (!checkboxContainer) {
+        console.error('Checkbox container not found');
+        return;
+    }
+    
+    for (let i = 0; i < detailedBills.length; i++) {
+        const billRecord = detailedBills[i];
+        const billFields = billRecord.fields;
+        
+        // Calculate the debtor's share for this specific bill
+        const debtorShare = calculatePersonShare(billRecord, debtorId);
+        
+        // Get bill details
+        const billTitle = billFields['Title'] || `Bill #${i + 1}`;
+        const totalAmount = billFields['Total Amount'] || 0;
+        const billDate = billFields['Date'] ? new Date(billFields['Date']).toLocaleDateString('en-IN') : 'No date';
+        const splitBetween = billFields['Split between'] || [];
+        const splitCount = splitBetween.length;
+        
+        // Create bill display element
+        const billDiv = document.createElement('div');
+        billDiv.className = 'flex items-center justify-between p-3 border rounded hover:bg-gray-50';
+        billDiv.innerHTML = `
+            <label class="flex items-center cursor-pointer flex-1">
+                <input type="checkbox" value="${billRecord.id}" class="bill-checkbox mr-3" 
+                       onchange="updateSelectedAmount()">
+                <div class="flex-1">
+                    <div class="font-medium text-gray-900">${billTitle}</div>
+                    <div class="text-sm text-gray-600">
+                        Total: ₹${totalAmount.toFixed(2)} | Split among ${splitCount} people | ${billDate}
+                    </div>
+                    <div class="text-sm font-medium text-blue-600">
+                        ${allPeople[debtorId]?.name || 'Debtor'}'s share: ₹${debtorShare.toFixed(2)}
+                    </div>
+                </div>
+            </label>
+        `;
+        
+        // Store bill data for later use
+        const checkbox = billDiv.querySelector('.bill-checkbox');
+        checkbox.dataset.amount = debtorShare.toFixed(2);
+        checkbox.dataset.billData = JSON.stringify({
+            id: billRecord.id,
+            title: billTitle,
+            totalAmount: totalAmount,
+            debtorShare: debtorShare,
+            settledBy: billFields['Settled By'] || []
+        });
+        
+        checkboxContainer.appendChild(billDiv);
+    }
+    
+    // If no bills found
+    if (detailedBills.length === 0) {
+        checkboxContainer.innerHTML = '<p class="text-gray-500 text-center">No bills found to settle.</p>';
+    }
+}
+
+// Update selected amount calculation
+function updateSelectedAmount() {
+    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
+    let totalSelected = 0;
+    
+    checkboxes.forEach(checkbox => {
+        totalSelected += parseFloat(checkbox.dataset.amount);
+    });
+    
+    document.getElementById('selectedAmount').textContent = `₹${totalSelected.toFixed(2)}`;
+    document.getElementById('settleSelectedBtn').disabled = checkboxes.length === 0;
+}
+
+// Enhanced settle selected bills function
+async function settleSelectedBills() {
+    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('Please select at least one bill to settle.');
+        return;
+    }
+    
+    // Get selected bills and calculate total
+    const selectedBills = [];
+    let totalAmount = 0;
+    
+    checkboxes.forEach(checkbox => {
+        const billData = JSON.parse(checkbox.dataset.billData);
+        selectedBills.push(billData);
+        totalAmount += parseFloat(checkbox.dataset.amount);
+    });
+    
+    // Get debtor and creditor info
+    const debtorName = allPeople[Object.keys(allPeople).find(id => 
+        selectedBills[0] && selectedBills[0].settledBy && !selectedBills[0].settledBy.includes(id)
+    )]?.name;
+    
+    // Find the actual debtor and creditor IDs from the modal context
+    const modalElement = document.getElementById('billSelectionModal');
+    const modalText = modalElement.querySelector('p').textContent;
+    const names = modalText.match(/<b>(.*?)<\/b>/g);
+    
+    let debtorId, creditorId;
+    if (names && names.length >= 2) {
+        const debtorNameFromModal = names[0].replace(/<\/?b>/g, '');
+        const creditorNameFromModal = names[1].replace(/<\/?b>/g, '');
+        
+        debtorId = Object.keys(allPeople).find(id => allPeople[id].name === debtorNameFromModal);
+        creditorId = Object.keys(allPeople).find(id => allPeople[id].name === creditorNameFromModal);
+    }
+    
+    if (!debtorId || !creditorId) {
+        alert('Error: Could not identify debtor and creditor. Please try again.');
+        return;
+    }
+    
+    // Close modal first
+    closeBillSelectionModal();
+    
+    // Convert bill data format for settlement function
+    const billsForSettlement = selectedBills.map(bill => ({
+        id: bill.id,
+        title: bill.title,
+        settledBy: bill.settledBy || []
+    }));
+    
+    // Settle the selected bills
+    await markDebtAsPaidWithHistory(debtorId, creditorId, totalAmount, billsForSettlement);
+}
+
+// Close modal function
+// Close modal function (UPDATED)
+async function closeBillSelectionModal() {
+    const modal = document.getElementById('billSelectionModal');
+    if (modal) {
+        modal.remove();
+    }
+    
+    // Add these lines to refresh the debts list after closing the modal
+    showDebtLoader(true, "Loading debts..."); // Optional: show loader while debts reload
+    try {
+        await loadAndRenderDebts();
+    } catch (e) {
+        console.error("Failed to reload debts after closing modal:", e);
+        // You might want to display an error to the user here
+    } finally {
+        showDebtLoader(false); // Hide loader
+    }
+}
+
+// Export payment history function
 function exportPaymentHistory() {
     if (paymentHistory.length === 0) {
         alert('No payment history to export.');
@@ -350,15 +577,16 @@ function exportPaymentHistory() {
     }
     
     const csvContent = [
-        ['Date', 'Debtor', 'Creditor', 'Amount', 'Time'].join(','),
+        ['Date', 'Time', 'Debtor', 'Creditor', 'Amount', 'Bills'].join(','),
         ...paymentHistory.map(settlement => {
             const date = new Date(settlement.settledAt);
             return [
                 date.toLocaleDateString('en-IN'),
+                date.toLocaleTimeString('en-IN'),
                 settlement.debtorName,
                 settlement.creditorName,
                 settlement.amount.toFixed(2),
-                date.toLocaleTimeString('en-IN')
+                (settlement.billTitles || []).join('; ')
             ].join(',');
         })
     ].join('\n');
@@ -374,146 +602,8 @@ function exportPaymentHistory() {
     window.URL.revokeObjectURL(url);
 }
 
-// Add export button to the history tab (optional)
-document.addEventListener("DOMContentLoaded", function() {
-    const historyStats = document.getElementById('historyStats');
-    if (historyStats) {
-        const exportBtn = document.createElement('button');
-        exportBtn.textContent = 'Export CSV';
-        exportBtn.className = 'mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm w-full';
-        exportBtn.onclick = exportPaymentHistory;
-        historyStats.appendChild(exportBtn);
-    }
-});
-
-// Add this new function to show bill selection modal
-function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) {
-    // Create modal HTML
-    const modalHTML = `
-        <div id="billSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
-                <h3 class="text-lg font-semibold mb-4">Select Bills to Settle</h3>
-                <p class="text-sm text-gray-600 mb-4">
-                    <b>${allPeople[debtorId]?.name}</b> owes <b>${allPeople[creditorId]?.name}</b>
-                </p>
-                <div id="billCheckboxes" class="space-y-2 mb-4">
-                    <!-- Bills will be populated here -->
-                </div>
-                <div class="flex justify-between items-center pt-4 border-t">
-                    <div>
-                        <span class="text-sm text-gray-600">Selected: </span>
-                        <span id="selectedAmount" class="font-bold text-blue-600">₹0.00</span>
-                    </div>
-                    <div class="space-x-2">
-                        <button onclick="closeBillSelectionModal()" 
-                                class="px-4 py-2 text-gray-600 hover:text-gray-800">
-                            Cancel
-                        </button>
-                        <button id="settleSelectedBtn" onclick="settleSelectedBills()" 
-                                class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded disabled:bg-gray-400" 
-                                disabled>
-                            Settle Selected
-                        </button>
-                    </div>
-                </div>
-            </div>
-        </div>
-    `;
-    
-    // Add modal to page
-    document.body.insertAdjacentHTML('beforeend', modalHTML);
-    
-    // Populate bill checkboxes
-    populateBillCheckboxes(bills, totalAmount, debtorId, creditorId);
-}
-
-// Add this function to populate bill checkboxes
-async function populateBillCheckboxes(bills, totalAmount, debtorId, creditorId) {
-    const checkboxContainer = document.getElementById('billCheckboxes');
-    const sharePerBill = totalAmount / bills.length; // Assuming equal split for now
-    
-    // For better UX, we should fetch bill details, but for now use share calculation
-    bills.forEach((bill, index) => {
-        const billDiv = document.createElement('div');
-        billDiv.className = 'flex items-center justify-between p-2 border rounded';
-        billDiv.innerHTML = `
-            <label class="flex items-center cursor-pointer flex-1">
-                <input type="checkbox" value="${bill.id}" class="bill-checkbox mr-2" 
-                       onchange="updateSelectedAmount()">
-                <div>
-                    <div class="font-medium">Bill #${index + 1}</div>
-                    <div class="text-sm text-gray-500">Share: ₹${sharePerBill.toFixed(2)}</div>
-                </div>
-            </label>
-        `;
-        
-        // Store amount as data attribute for calculation
-        billDiv.querySelector('.bill-checkbox').dataset.amount = sharePerBill.toFixed(2);
-        billDiv.querySelector('.bill-checkbox').dataset.billData = JSON.stringify(bill);
-        
-        checkboxContainer.appendChild(billDiv);
-    });
-}
-
-// Add this function to update selected amount
-function updateSelectedAmount() {
-    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
-    let totalSelected = 0;
-    
-    checkboxes.forEach(checkbox => {
-        totalSelected += parseFloat(checkbox.dataset.amount);
-    });
-    
-    document.getElementById('selectedAmount').textContent = `₹${totalSelected.toFixed(2)}`;
-    document.getElementById('settleSelectedBtn').disabled = checkboxes.length === 0;
-}
-
-// Add this function to settle selected bills
-async function settleSelectedBills() {
-    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
-    
-    if (checkboxes.length === 0) {
-        alert('Please select at least one bill to settle.');
-        return;
-    }
-    
-    // Get selected bills and calculate total
-    const selectedBills = [];
-    let totalAmount = 0;
-    let debtorId, creditorId;
-    
-    checkboxes.forEach(checkbox => {
-        const billData = JSON.parse(checkbox.dataset.billData);
-        selectedBills.push(billData);
-        totalAmount += parseFloat(checkbox.dataset.amount);
-    });
-    
-    // Get debtor and creditor from the first bill (they should be the same for all)
-    const modalElement = document.getElementById('billSelectionModal');
-    const debtorName = modalElement.querySelector('b').textContent;
-    const creditorName = modalElement.querySelectorAll('b')[1].textContent;
-    
-    // Find IDs from names
-    debtorId = Object.keys(allPeople).find(id => allPeople[id].name === debtorName);
-    creditorId = Object.keys(allPeople).find(id => allPeople[id].name === creditorName);
-    
-    // Close modal first
-    closeBillSelectionModal();
-    
-    // Settle the selected bills
-    await markDebtAsPaidWithHistory(debtorId, creditorId, totalAmount, selectedBills);
-}
-
-// Add this function to close the modal
-function closeBillSelectionModal() {
-    const modal = document.getElementById('billSelectionModal');
-    if (modal) {
-        modal.remove();
-    }
-}
-
-// Add this CSS to your existing styles section (add to the <style> tag in your HTML)
-const additionalCSS = `
+// Enhanced CSS styles
+const enhancedCSS = `
 #billSelectionModal .bill-checkbox:checked + div {
     background-color: #f0f9ff;
 }
@@ -537,14 +627,76 @@ const additionalCSS = `
     transition: all 0.2s;
     font-weight: 500;
 }
-`;
 
-// Add the CSS to the page
-if (!document.getElementById('additionalStyles')) {
-    const style = document.createElement('style');
-    style.id = 'additionalStyles';
-    style.textContent = additionalCSS;
-    document.head.appendChild(style);
+.payment-history-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 12px;
+    border-bottom: 1px solid #e5e7eb;
+    background-color: #fafafa;
+    border-radius: 8px;
+    margin-bottom: 8px;
 }
 
-console.log('Payment History Tracking Script Loaded Successfully!');
+.notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    animation: slideIn 0.3s ease-out;
+}
+
+@keyframes slideIn {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+.bill-checkbox {
+    transform: scale(1.2);
+}
+
+#billCheckboxes label:hover {
+    background-color: #f8fafc;
+}
+`;
+
+// Initialize enhanced payment history system
+document.addEventListener("DOMContentLoaded", function() {
+    // Add enhanced CSS to the page
+    if (!document.getElementById('enhancedStyles')) {
+        const style = document.createElement('style');
+        style.id = 'enhancedStyles';
+        style.textContent = enhancedCSS;
+        document.head.appendChild(style);
+    }
+    
+    // Load payment history when the app starts
+    loadPaymentHistory();
+    
+    // Override the original renderDebts function
+    if (typeof window.renderDebts === 'function') {
+        window.originalRenderDebts = window.renderDebts;
+        window.renderDebts = renderDebtsWithHistory;
+    }
+    
+    // Add export button to the history tab
+    setTimeout(() => {
+        const historyStats = document.getElementById('historyStats');
+        if (historyStats && !document.getElementById('exportBtn')) {
+            const exportBtn = document.createElement('button');
+            exportBtn.id = 'exportBtn';
+            exportBtn.textContent = 'Export CSV';
+            exportBtn.className = 'mt-3 px-4 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg text-sm w-full';
+            exportBtn.onclick = exportPaymentHistory;
+            historyStats.appendChild(exportBtn);
+        }
+    }, 1000);
+});
+
+console.log('Enhanced Payment History Tracking Script Loaded Successfully!');
