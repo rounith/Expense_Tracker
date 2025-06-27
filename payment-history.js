@@ -77,13 +77,39 @@ function renderDebtsWithHistory(balances) {
     balances.forEach(debt => {
         const row = document.createElement('div');
         row.className = 'debt-row';
-        row.innerHTML = `<span><b>${debt.from}</b> owes <b>${debt.to}</b>: <span class="font-bold text-blue-600">₹${debt.amount.toFixed(2)}</span></span>`;
         
-        const button = document.createElement('button');
-        button.textContent = 'Settle Up';
-        button.onclick = () => markDebtAsPaidWithHistory(debt.fromId, debt.toId, debt.amount, debt.bills);
+        // Show individual bills if there are multiple
+        if (debt.bills.length > 1) {
+            row.innerHTML = `
+                <div class="w-full">
+                    <div class="flex justify-between items-center mb-2">
+                        <span><b>${debt.from}</b> owes <b>${debt.to}</b>: <span class="font-bold text-blue-600">₹${debt.amount.toFixed(2)}</span></span>
+                        <div class="space-x-2">
+                            <button onclick="showBillSelectionModal('${debt.fromId}', '${debt.toId}', '${debt.amount}', ${JSON.stringify(debt.bills).replace(/"/g, '&quot;')})" 
+                                    class="bg-blue-500 hover:bg-blue-600 text-white px-3 py-1 rounded text-sm">
+                                Select Bills
+                            </button>
+                            <button onclick="markDebtAsPaidWithHistory('${debt.fromId}', '${debt.toId}', ${debt.amount}, ${JSON.stringify(debt.bills).replace(/"/g, '&quot;')})" 
+                                    class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
+                                Settle All
+                            </button>
+                        </div>
+                    </div>
+                    <div class="text-xs text-gray-500 ml-4">
+                        ${debt.bills.length} bills involved
+                    </div>
+                </div>
+            `;
+        } else {
+            // Single bill - keep existing simple layout
+            row.innerHTML = `<span><b>${debt.from}</b> owes <b>${debt.to}</b>: <span class="font-bold text-blue-600">₹${debt.amount.toFixed(2)}</span></span>`;
+            
+            const button = document.createElement('button');
+            button.textContent = 'Settle Up';
+            button.onclick = () => markDebtAsPaidWithHistory(debt.fromId, debt.toId, debt.amount, debt.bills);
+            row.appendChild(button);
+        }
         
-        row.appendChild(button);
         debtsListDiv.appendChild(row);
     });
 }
@@ -359,5 +385,166 @@ document.addEventListener("DOMContentLoaded", function() {
         historyStats.appendChild(exportBtn);
     }
 });
+
+// Add this new function to show bill selection modal
+function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) {
+    // Create modal HTML
+    const modalHTML = `
+        <div id="billSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div class="bg-white rounded-lg p-6 max-w-md w-full mx-4 max-h-96 overflow-y-auto">
+                <h3 class="text-lg font-semibold mb-4">Select Bills to Settle</h3>
+                <p class="text-sm text-gray-600 mb-4">
+                    <b>${allPeople[debtorId]?.name}</b> owes <b>${allPeople[creditorId]?.name}</b>
+                </p>
+                <div id="billCheckboxes" class="space-y-2 mb-4">
+                    <!-- Bills will be populated here -->
+                </div>
+                <div class="flex justify-between items-center pt-4 border-t">
+                    <div>
+                        <span class="text-sm text-gray-600">Selected: </span>
+                        <span id="selectedAmount" class="font-bold text-blue-600">₹0.00</span>
+                    </div>
+                    <div class="space-x-2">
+                        <button onclick="closeBillSelectionModal()" 
+                                class="px-4 py-2 text-gray-600 hover:text-gray-800">
+                            Cancel
+                        </button>
+                        <button id="settleSelectedBtn" onclick="settleSelectedBills()" 
+                                class="px-4 py-2 bg-green-500 hover:bg-green-600 text-white rounded disabled:bg-gray-400" 
+                                disabled>
+                            Settle Selected
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    // Add modal to page
+    document.body.insertAdjacentHTML('beforeend', modalHTML);
+    
+    // Populate bill checkboxes
+    populateBillCheckboxes(bills, totalAmount, debtorId, creditorId);
+}
+
+// Add this function to populate bill checkboxes
+async function populateBillCheckboxes(bills, totalAmount, debtorId, creditorId) {
+    const checkboxContainer = document.getElementById('billCheckboxes');
+    const sharePerBill = totalAmount / bills.length; // Assuming equal split for now
+    
+    // For better UX, we should fetch bill details, but for now use share calculation
+    bills.forEach((bill, index) => {
+        const billDiv = document.createElement('div');
+        billDiv.className = 'flex items-center justify-between p-2 border rounded';
+        billDiv.innerHTML = `
+            <label class="flex items-center cursor-pointer flex-1">
+                <input type="checkbox" value="${bill.id}" class="bill-checkbox mr-2" 
+                       onchange="updateSelectedAmount()">
+                <div>
+                    <div class="font-medium">Bill #${index + 1}</div>
+                    <div class="text-sm text-gray-500">Share: ₹${sharePerBill.toFixed(2)}</div>
+                </div>
+            </label>
+        `;
+        
+        // Store amount as data attribute for calculation
+        billDiv.querySelector('.bill-checkbox').dataset.amount = sharePerBill.toFixed(2);
+        billDiv.querySelector('.bill-checkbox').dataset.billData = JSON.stringify(bill);
+        
+        checkboxContainer.appendChild(billDiv);
+    });
+}
+
+// Add this function to update selected amount
+function updateSelectedAmount() {
+    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
+    let totalSelected = 0;
+    
+    checkboxes.forEach(checkbox => {
+        totalSelected += parseFloat(checkbox.dataset.amount);
+    });
+    
+    document.getElementById('selectedAmount').textContent = `₹${totalSelected.toFixed(2)}`;
+    document.getElementById('settleSelectedBtn').disabled = checkboxes.length === 0;
+}
+
+// Add this function to settle selected bills
+async function settleSelectedBills() {
+    const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
+    
+    if (checkboxes.length === 0) {
+        alert('Please select at least one bill to settle.');
+        return;
+    }
+    
+    // Get selected bills and calculate total
+    const selectedBills = [];
+    let totalAmount = 0;
+    let debtorId, creditorId;
+    
+    checkboxes.forEach(checkbox => {
+        const billData = JSON.parse(checkbox.dataset.billData);
+        selectedBills.push(billData);
+        totalAmount += parseFloat(checkbox.dataset.amount);
+    });
+    
+    // Get debtor and creditor from the first bill (they should be the same for all)
+    const modalElement = document.getElementById('billSelectionModal');
+    const debtorName = modalElement.querySelector('b').textContent;
+    const creditorName = modalElement.querySelectorAll('b')[1].textContent;
+    
+    // Find IDs from names
+    debtorId = Object.keys(allPeople).find(id => allPeople[id].name === debtorName);
+    creditorId = Object.keys(allPeople).find(id => allPeople[id].name === creditorName);
+    
+    // Close modal first
+    closeBillSelectionModal();
+    
+    // Settle the selected bills
+    await markDebtAsPaidWithHistory(debtorId, creditorId, totalAmount, selectedBills);
+}
+
+// Add this function to close the modal
+function closeBillSelectionModal() {
+    const modal = document.getElementById('billSelectionModal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+// Add this CSS to your existing styles section (add to the <style> tag in your HTML)
+const additionalCSS = `
+#billSelectionModal .bill-checkbox:checked + div {
+    background-color: #f0f9ff;
+}
+
+.debt-row {
+    padding: 12px 8px;
+    border-bottom: 1px solid #e5e7eb;
+}
+
+.debt-row:last-child {
+    border-bottom: none;
+}
+
+.debt-row button {
+    padding: 6px 12px;
+    font-size: 0.875em;
+    cursor: pointer;
+    color: white;
+    border-radius: 6px;
+    border: none;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+`;
+
+// Add the CSS to the page
+if (!document.getElementById('additionalStyles')) {
+    const style = document.createElement('style');
+    style.id = 'additionalStyles';
+    style.textContent = additionalCSS;
+    document.head.appendChild(style);
+}
 
 console.log('Payment History Tracking Script Loaded Successfully!');
