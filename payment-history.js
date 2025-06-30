@@ -4,6 +4,9 @@
 // --- Payment History Management ---
 let paymentHistory = JSON.parse(localStorage.getItem('paymentHistory') || '[]');
 
+// Store current modal context to avoid parsing issues
+let currentModalContext = null;
+
 // Tab switching functionality
 document.getElementById('debtsTab').addEventListener('click', () => switchTab('debts'));
 document.getElementById('historyTab').addEventListener('click', () => switchTab('history'));
@@ -362,10 +365,19 @@ function calculatePersonShare(bill, personId) {
     return totalAmount / splitBetween.length;
 }
 
-// ENHANCED: Show bill selection modal with real bill data from Airtable
+// FIXED: Show bill selection modal with proper context storage
 async function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) {
     try {
         showDebtLoader(true, "Loading bill details...");
+        
+        // Store the context for later use - THIS IS THE KEY FIX
+        currentModalContext = {
+            debtorId: debtorId,
+            creditorId: creditorId,
+            debtorName: allPeople[debtorId]?.name || 'Unknown',
+            creditorName: allPeople[creditorId]?.name || 'Unknown',
+            totalAmount: totalAmount
+        };
         
         // Fetch detailed bill information from Airtable
         const billIds = bills.map(bill => bill.id);
@@ -373,11 +385,11 @@ async function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) 
         
         // Create modal HTML
         const modalHTML = `
-            <div id="billSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+            <div id="billSelectionModal" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-content z-50">
                 <div class="bg-white rounded-lg p-6 max-w-lg w-full mx-4 max-h-96 overflow-y-auto">
                     <h3 class="text-lg font-semibold mb-4">Select Bills to Settle</h3>
                     <p class="text-sm text-gray-600 mb-4">
-                        <b>${allPeople[debtorId]?.name}</b> owes <b>${allPeople[creditorId]?.name}</b>
+                        <b>${currentModalContext.debtorName}</b> owes <b>${currentModalContext.creditorName}</b>
                     </p>
                     <div id="billCheckboxes" class="space-y-2 mb-4">
                         <!-- Bills will be populated here -->
@@ -412,6 +424,7 @@ async function showBillSelectionModal(debtorId, creditorId, totalAmount, bills) 
     } catch (error) {
         console.error('Error loading bill selection modal:', error);
         alert('Error loading bill details. Please try again.');
+        currentModalContext = null; // Clear context on error
     } finally {
         showDebtLoader(false);
     }
@@ -492,12 +505,18 @@ function updateSelectedAmount() {
     document.getElementById('settleSelectedBtn').disabled = checkboxes.length === 0;
 }
 
-// Enhanced settle selected bills function
+// FIXED: Enhanced settle selected bills function using stored context
 async function settleSelectedBills() {
     const checkboxes = document.querySelectorAll('.bill-checkbox:checked');
     
     if (checkboxes.length === 0) {
         alert('Please select at least one bill to settle.');
+        return;
+    }
+    
+    // Check if we have the modal context - THIS IS THE KEY FIX
+    if (!currentModalContext) {
+        alert('Error: Could not identify debtor and creditor. Please try again.');
         return;
     }
     
@@ -511,29 +530,9 @@ async function settleSelectedBills() {
         totalAmount += parseFloat(checkbox.dataset.amount);
     });
     
-    // Get debtor and creditor info
-    const debtorName = allPeople[Object.keys(allPeople).find(id => 
-        selectedBills[0] && selectedBills[0].settledBy && !selectedBills[0].settledBy.includes(id)
-    )]?.name;
-    
-    // Find the actual debtor and creditor IDs from the modal context
-    const modalElement = document.getElementById('billSelectionModal');
-    const modalText = modalElement.querySelector('p').textContent;
-    const names = modalText.match(/<b>(.*?)<\/b>/g);
-    
-    let debtorId, creditorId;
-    if (names && names.length >= 2) {
-        const debtorNameFromModal = names[0].replace(/<\/?b>/g, '');
-        const creditorNameFromModal = names[1].replace(/<\/?b>/g, '');
-        
-        debtorId = Object.keys(allPeople).find(id => allPeople[id].name === debtorNameFromModal);
-        creditorId = Object.keys(allPeople).find(id => allPeople[id].name === creditorNameFromModal);
-    }
-    
-    if (!debtorId || !creditorId) {
-        alert('Error: Could not identify debtor and creditor. Please try again.');
-        return;
-    }
+    // Use the stored context instead of trying to parse HTML
+    const debtorId = currentModalContext.debtorId;
+    const creditorId = currentModalContext.creditorId;
     
     // Close modal first
     closeBillSelectionModal();
@@ -549,13 +548,15 @@ async function settleSelectedBills() {
     await markDebtAsPaidWithHistory(debtorId, creditorId, totalAmount, billsForSettlement);
 }
 
-// Close modal function
-// Close modal function (UPDATED)
+// FIXED: Close modal function with context cleanup
 async function closeBillSelectionModal() {
     const modal = document.getElementById('billSelectionModal');
     if (modal) {
         modal.remove();
     }
+    
+    // Clear the modal context - IMPORTANT FOR CLEANUP
+    currentModalContext = null;
     
     // Add these lines to refresh the debts list after closing the modal
     showDebtLoader(true, "Loading debts..."); // Optional: show loader while debts reload
