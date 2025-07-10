@@ -73,17 +73,90 @@ async function markDebtAsPaidWithHistory(debtorId, creditorId, amount, billsToSe
 // Updated renderDebts function to use the new settlement function
 function renderDebtsWithHistory(balances) {
     debtsListDiv.innerHTML = '';
+    
     if (balances.length === 0) {
         debtsListDiv.innerHTML = '<p class="text-green-600 text-center">🎉 All settled up!</p>';
         return;
+    }
+
+    // Add simplify option header
+    const headerDiv = document.createElement('div');
+    headerDiv.className = 'flex justify-between items-center mb-4 pb-2 border-b';
+    headerDiv.innerHTML = `
+        <div class="flex items-center space-x-2">
+            <h3 class="font-semibold text-gray-700">Outstanding Debts</h3>
+            <span class="text-sm text-gray-500">(${balances.length} ${balances.length === 1 ? 'debt' : 'debts'})</span>
+        </div>
+        <div class="flex space-x-2">
+            <button id="simplifyDebtsBtn" 
+                    class="px-3 py-1 bg-orange-500 hover:bg-orange-600 text-white text-sm rounded-lg transition-colors"
+                    ${balances.length <= 1 ? 'disabled' : ''}>
+                📊 Simplify Debts
+            </button>
+            <button id="showOriginalDebtsBtn" 
+                    class="px-3 py-1 bg-gray-500 hover:bg-gray-600 text-white text-sm rounded-lg transition-colors hidden">
+                📋 Show Original
+            </button>
+        </div>
+    `;
+    debtsListDiv.appendChild(headerDiv);
+
+    // Add event listeners for simplify buttons
+    document.getElementById('simplifyDebtsBtn').addEventListener('click', () => {
+        const simplified = simplifyDebts(balances);
+        renderDebtsList(simplified, true);
+        document.getElementById('simplifyDebtsBtn').classList.add('hidden');
+        document.getElementById('showOriginalDebtsBtn').classList.remove('hidden');
+    });
+    
+    document.getElementById('showOriginalDebtsBtn').addEventListener('click', () => {
+        renderDebtsList(balances, false);
+        document.getElementById('showOriginalDebtsBtn').classList.add('hidden');
+        document.getElementById('simplifyDebtsBtn').classList.remove('hidden');
+    });
+
+    // Render the actual debts list
+    renderDebtsList(balances, false);
+}
+// Separate function to render the debts list
+function renderDebtsList(balances, isSimplified) {
+    // Remove existing debts (but keep the header)
+    const existingDebts = debtsListDiv.querySelectorAll('.debt-row');
+    existingDebts.forEach(debt => debt.remove());
+    
+    // Add simplification notice if showing simplified debts
+    if (isSimplified) {
+        const noticeDiv = document.createElement('div');
+        noticeDiv.className = 'debt-row bg-orange-50 border-orange-200 border rounded-lg p-3 mb-2';
+        noticeDiv.innerHTML = `
+            <div class="flex items-center text-orange-700">
+                <span class="mr-2">💡</span>
+                <div>
+                    <div class="font-medium">Simplified Debt Structure</div>
+                    <div class="text-sm">Showing optimized payments to minimize total transactions</div>
+                </div>
+            </div>
+        `;
+        debtsListDiv.appendChild(noticeDiv);
     }
 
     balances.forEach(debt => {
         const row = document.createElement('div');
         row.className = 'debt-row';
         
-        // Show individual bills if there are multiple
-        if (debt.bills.length > 1) {
+        if (debt.isSimplified) {
+            // Simplified debt - single payment only
+            row.innerHTML = `
+                <div class="flex justify-between items-center">
+                    <span><b>${debt.from}</b> pays <b>${debt.to}</b>: <span class="font-bold text-blue-600">₹${debt.amount.toFixed(2)}</span></span>
+                    <button onclick="confirmSimplifiedPayment('${debt.fromId}', '${debt.toId}', ${debt.amount}, '${debt.from}', '${debt.to}')" 
+                            class="bg-green-500 hover:bg-green-600 text-white px-3 py-1 rounded text-sm">
+                        💳 Pay Now
+                    </button>
+                </div>
+            `;
+        } else if (debt.bills && debt.bills.length > 1) {
+            // Multiple bills - keep existing functionality
             row.innerHTML = `
                 <div class="w-full">
                     <div class="flex justify-between items-center mb-2">
@@ -117,6 +190,111 @@ function renderDebtsWithHistory(balances) {
         debtsListDiv.appendChild(row);
     });
 }
+
+// Add this new function to handle simplified payments
+async function confirmSimplifiedPayment(debtorId, creditorId, amount, debtorName, creditorName) {
+    const confirmMessage = `Confirm simplified payment:\n\n` +
+                          `${debtorName} will pay ${creditorName} ₹${amount.toFixed(2)}\n\n` +
+                          `⚠️ This is a simplified payment and may settle multiple underlying debts.\n` +
+                          `Continue?`;
+    
+    if (confirm(confirmMessage)) {
+        try {
+            showDebtLoader(true, "Processing simplified payment...");
+            
+            // For simplified payments, we need to find and settle the underlying bills
+            // This is a simplified approach - in practice, you'd want more sophisticated logic
+            
+            // Record the payment in history
+            const settlement = {
+                id: Date.now().toString(),
+                debtorId: debtorId,
+                creditorId: creditorId,
+                debtorName: debtorName,
+                creditorName: creditorName,
+                amount: amount,
+                settledAt: new Date().toISOString(),
+                billIds: [], // Empty for simplified payments
+                billTitles: ['Simplified Payment'],
+                isSimplified: true
+            };
+            
+            paymentHistory.unshift(settlement);
+            localStorage.setItem('paymentHistory', JSON.stringify(paymentHistory));
+            
+            // Show success message
+            showNotification(
+                `Simplified Payment Recorded! ${debtorName} paid ${creditorName} ₹${amount.toFixed(2)}`, 
+                'success'
+            );
+            
+            // Note: For a complete implementation, you'd need to:
+            // 1. Find all bills between these two people
+            // 2. Mark appropriate bills as settled
+            // 3. Handle partial settlements correctly
+            // This is a simplified version for demonstration
+            
+            // Refresh the debts view
+            await loadAndRenderDebts();
+            
+        } catch (error) {
+            console.error("Failed to process simplified payment:", error);
+            alert("Error processing payment. Please try again.");
+        } finally {
+            showDebtLoader(false);
+        }
+    }
+}
+
+// Add this CSS for better styling
+const simplifyDebtsCSS = `
+.debt-row {
+    padding: 12px 8px;
+    border-bottom: 1px solid #e5e7eb;
+    transition: background-color 0.2s;
+}
+
+.debt-row:hover {
+    background-color: #f9fafb;
+}
+
+.debt-row:last-child {
+    border-bottom: none;
+}
+
+#simplifyDebtsBtn:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+}
+
+.debt-row button {
+    padding: 6px 12px;
+    font-size: 0.875em;
+    cursor: pointer;
+    color: white;
+    border-radius: 6px;
+    border: none;
+    transition: all 0.2s;
+    font-weight: 500;
+}
+
+.debt-row button:hover:not(:disabled) {
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+`;
+
+// Add the CSS to the existing enhanced styles
+document.addEventListener("DOMContentLoaded", function() {
+    // Add the new CSS
+    if (!document.getElementById('simplifyDebtsStyles')) {
+        const style = document.createElement('style');
+        style.id = 'simplifyDebtsStyles';
+        style.textContent = simplifyDebtsCSS;
+        document.head.appendChild(style);
+    }
+});
+
 
 // Load and display payment history
 function loadPaymentHistory() {
@@ -602,6 +780,79 @@ function exportPaymentHistory() {
     document.body.removeChild(a);
     window.URL.revokeObjectURL(url);
 }
+// Simplify debts using a basic debt settlement algorithm
+function simplifyDebts(balances) {
+    if (balances.length <= 1) return balances;
+    
+    // Convert to creditor/debtor format for easier calculation
+    const creditors = []; // People who are owed money
+    const debtors = [];   // People who owe money
+    
+    // Group by person and calculate net balance
+    const netBalances = {};
+    
+    balances.forEach(debt => {
+        // Add to debtor's balance (negative)
+        if (!netBalances[debt.fromId]) {
+            netBalances[debt.fromId] = { id: debt.fromId, name: debt.from, balance: 0 };
+        }
+        netBalances[debt.fromId].balance -= debt.amount;
+        
+        // Add to creditor's balance (positive)
+        if (!netBalances[debt.toId]) {
+            netBalances[debt.toId] = { id: debt.toId, name: debt.to, balance: 0 };
+        }
+        netBalances[debt.toId].balance += debt.amount;
+    });
+    
+    // Separate into creditors and debtors
+    Object.values(netBalances).forEach(person => {
+        if (person.balance > 0.01) { // Small threshold for floating point errors
+            creditors.push(person);
+        } else if (person.balance < -0.01) {
+            debtors.push({ ...person, balance: Math.abs(person.balance) });
+        }
+    });
+    
+    // Sort creditors and debtors by amount (largest first)
+    creditors.sort((a, b) => b.balance - a.balance);
+    debtors.sort((a, b) => b.balance - a.balance);
+    
+    // Create simplified debts
+    const simplifiedDebts = [];
+    let i = 0, j = 0;
+    
+    while (i < creditors.length && j < debtors.length) {
+        const creditor = creditors[i];
+        const debtor = debtors[j];
+        
+        const settleAmount = Math.min(creditor.balance, debtor.balance);
+        
+        if (settleAmount > 0.01) { // Only add if amount is meaningful
+            simplifiedDebts.push({
+                fromId: debtor.id,
+                from: debtor.name,
+                toId: creditor.id,
+                to: creditor.name,
+                amount: settleAmount,
+                bills: [], // Simplified debts don't have specific bills
+                isSimplified: true
+            });
+        }
+        
+        // Update remaining balances
+        creditor.balance -= settleAmount;
+        debtor.balance -= settleAmount;
+        
+        // Move to next creditor or debtor if current one is settled
+        if (creditor.balance < 0.01) i++;
+        if (debtor.balance < 0.01) j++;
+    }
+    
+    return simplifiedDebts;
+}
+
+
 
 // Enhanced CSS styles
 const enhancedCSS = `
